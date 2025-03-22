@@ -101,7 +101,8 @@ impl Program {
     #[tracing::instrument(skip_all, name = "Program::build")]
     pub fn build(&mut self) {
         if self.elf.is_none() {
-            #[cfg(not(target_arch = "wasm32"))]
+            // TODO(Maks) check self.std flag, understand why feature `guest-std` is present
+            // #[cfg(not(target_arch = "wasm32"))]
             install_toolchain().unwrap();
             #[cfg(not(target_arch = "wasm32"))]
             install_no_std_toolchain().unwrap();
@@ -112,6 +113,8 @@ impl Program {
                 "-C",
                 &format!("link-arg=-T{}", self.linker_path()),
                 "-C",
+                "link-arg=--fatal-warnings",
+                "-C",
                 "passes=lower-atomic",
                 "-C",
                 "panic=abort",
@@ -121,8 +124,11 @@ impl Program {
                 "opt-level=z",
             ];
 
+            // TODO(Maks) add a flag argument to provable macros to discriminate between rv64 and rv32
+            // for rv64 we need a custom toolchain anyway
+            self.std = true; // for rv32 and rv64n we need a different discriminator
             let toolchain = if self.std {
-                "riscv32im-jolt-zkvm-elf"
+                "riscv64ima-jolt-zkvm-elf"
             } else {
                 "riscv32im-unknown-none-elf"
             };
