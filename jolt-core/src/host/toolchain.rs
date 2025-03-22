@@ -32,7 +32,7 @@ pub fn install_toolchain() -> Result<()> {
         link_toolchain()?;
         write_tag_file()?;
         println!(
-            "\"riscv32im-jolt-zkvm-elf\" toolchain installed successfully at {:?}",
+            "\"riscv64ima-jolt-zkvm-elf\" toolchain installed successfully at {:?}",
             jolt_dir()
         );
     }
@@ -85,7 +85,7 @@ fn link_toolchain() -> Result<()> {
         .args([
             "toolchain",
             "link",
-            "riscv32im-jolt-zkvm-elf",
+            "riscv64ima-jolt-zkvm-elf",
             link_path.to_str().unwrap(),
         ])
         .output()?;
@@ -160,7 +160,7 @@ fn remove_archive() -> Result<()> {
 fn toolchain_url() -> String {
     let target = target_lexicon::HOST;
     format!(
-        "https://github.com/a16z/rust/releases/download/{}/rust-toolchain-{}.tar.gz",
+        "https://github.com/maksimryndin/rust-jolt/releases/download/{}/rust-toolchain-{}.tar.gz",
         TOOLCHAIN_TAG, target,
     )
 }
@@ -185,7 +185,7 @@ pub fn uninstall_toolchain() -> Result<()> {
 
     // Remove the linked toolchain from rustup
     let output = std::process::Command::new("rustup")
-        .args(["toolchain", "remove", "riscv32im-jolt-zkvm-elf"])
+        .args(["toolchain", "remove", "riscv64ima-jolt-zkvm-elf"])
         .output()?;
 
     if !output.status.success() {
@@ -210,7 +210,7 @@ pub fn uninstall_toolchain() -> Result<()> {
         fs::remove_file(&tag_file)?;
     }
 
-    println!("\"riscv32im-jolt-zkvm-elf\" toolchain uninstalled successfully");
+    println!("\"riscv64ima-jolt-zkvm-elf\" toolchain uninstalled successfully");
     Ok(())
 }
 
