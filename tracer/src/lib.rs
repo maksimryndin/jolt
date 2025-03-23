@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 #![allow(clippy::legacy_numeric_constants)]
+#![feature(generic_const_items)]
 
 use std::{fs::File, io::Read, path::PathBuf};
 
 use common::{self, constants::RAM_START_ADDRESS};
 use emulator::{
-    cpu::{self, Xlen},
     default_terminal::DefaultTerminal,
     Emulator,
 };
@@ -17,21 +17,20 @@ mod emulator;
 mod trace;
 
 pub use common::rv_trace::{
-    ELFInstruction, JoltDevice, MemoryState, RVTraceRow, RegisterState, RV32IM,
+    ELFInstruction, JoltDevice, MemoryState, RVTraceRow, RegisterState, RV_IM,
 };
 
 use crate::decode::decode_raw;
 
 #[tracing::instrument(skip_all)]
-pub fn trace(
+pub fn trace<const XLEN: u8>(
     elf: &PathBuf,
     inputs: &[u8],
     input_size: u64,
     output_size: u64,
-) -> (Vec<RVTraceRow>, JoltDevice) {
+) -> (Vec<RVTraceRow<XLEN>>, JoltDevice) {
     let term = DefaultTerminal::new();
     let mut emulator = Emulator::new(Box::new(term));
-    emulator.update_xlen(get_xlen());
 
     let mut jolt_device = JoltDevice::new(input_size, output_size);
     jolt_device.inputs = inputs.to_vec();
@@ -70,9 +69,9 @@ pub fn trace(
 }
 
 #[tracing::instrument(skip_all)]
-pub fn decode(elf: &[u8]) -> (Vec<ELFInstruction>, Vec<(u64, u8)>) {
+pub fn decode<const XLEN: u8>(elf: &[u8]) -> (Vec<ELFInstruction<XLEN>>, Vec<(u64, u8)>) {
     let obj = object::File::parse(elf).unwrap();
-
+    // TODO(Maks) check that word_size is correct for the parsed object file
     let sections = obj
         .sections()
         .filter(|s| s.address() >= RAM_START_ADDRESS)
@@ -91,7 +90,7 @@ pub fn decode(elf: &[u8]) -> (Vec<ELFInstruction>, Vec<(u64, u8)>) {
 
                 if let Ok(inst) = decode_raw(word) {
                     if let Some(trace) = inst.trace {
-                        let inst = trace(&inst, &get_xlen(), word, address);
+                        let inst = trace(&inst, word, address);
                         instructions.push(inst);
                         continue;
                     }
@@ -99,7 +98,7 @@ pub fn decode(elf: &[u8]) -> (Vec<ELFInstruction>, Vec<(u64, u8)>) {
                 // Unrecognized instruction, or from a ReadOnlyData section
                 instructions.push(ELFInstruction {
                     address,
-                    opcode: RV32IM::UNIMPL,
+                    opcode: RV_IM::UNIMPL,
                     rs1: None,
                     rs2: None,
                     rd: None,
@@ -115,12 +114,4 @@ pub fn decode(elf: &[u8]) -> (Vec<ELFInstruction>, Vec<(u64, u8)>) {
     }
 
     (instructions, data)
-}
-
-fn get_xlen() -> Xlen {
-    match common::constants::XLEN {
-        32 => cpu::Xlen::Bit32,
-        64 => cpu::Xlen::Bit64,
-        _ => panic!("Emulator only supports 32 / 64 bit registers."),
-    }
 }

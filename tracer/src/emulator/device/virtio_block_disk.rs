@@ -90,7 +90,7 @@ impl VirtioBlockDisk {
     ///
     /// # Arguments
     /// * `memory`
-    pub fn tick(&mut self, memory: &mut MemoryWrapper) {
+    pub fn tick<const XLEN: u8>(&mut self, memory: &mut MemoryWrapper<{XLEN}>) {
         if !self.notify_clocks.is_empty()
             && (self.clock == self.notify_clocks[0] + DISK_ACCESS_DELAY)
         {
@@ -318,9 +318,9 @@ impl VirtioBlockDisk {
     /// * `mem_address` Physical address. Must be eight-byte aligned.
     /// * `disk_address` Must be eight-byte aligned.
     /// * `length` Must be eight-byte aligned.
-    fn transfer_from_disk(
+    fn transfer_from_disk<const XLEN: u8>(
         &mut self,
-        memory: &mut MemoryWrapper,
+        memory: &mut MemoryWrapper<XLEN>,
         mem_address: u64,
         disk_address: u64,
         length: u64,
@@ -353,9 +353,9 @@ impl VirtioBlockDisk {
     /// * `mem_address` Physical address. Must be eight-byte aligned.
     /// * `disk_address` Must be eight-byte aligned.
     /// * `length` Must be eight-byte aligned.
-    fn transfer_to_disk(
+    fn transfer_to_disk<const XLEN: u8>(
         &mut self,
-        memory: &mut MemoryWrapper,
+        memory: &mut MemoryWrapper<{XLEN}>,
         mem_address: u64,
         disk_address: u64,
         length: u64,
@@ -454,7 +454,7 @@ impl VirtioBlockDisk {
     }
 
     // @TODO: Follow the virtio block specification more properly.
-    fn handle_disk_access(&mut self, memory: &mut MemoryWrapper) {
+    fn handle_disk_access<const XLEN: u8>(&mut self, memory: &mut MemoryWrapper<XLEN>) {
         let base_desc_address = self.get_base_desc_address();
         let base_avail_address = self.get_base_avail_address();
         let base_used_address = self.get_base_used_address();

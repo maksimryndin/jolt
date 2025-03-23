@@ -2,14 +2,14 @@ use std::cell::RefCell;
 
 use common::rv_trace::{ELFInstruction, MemoryState, RVTraceRow, RegisterState};
 
-use crate::emulator::cpu::Xlen;
 
-pub struct Tracer {
-    pub rows: RefCell<Vec<RVTraceRow>>,
+// TODO(Maks) try remove RefCell
+pub struct Tracer<const XLEN: u8> {
+    pub rows: RefCell<Vec<RVTraceRow<XLEN>>>,
     open: RefCell<bool>,
 }
 
-impl Tracer {
+impl<const XLEN: u8> Tracer<XLEN> {
     pub fn new() -> Self {
         Self {
             rows: RefCell::new(Vec::new()),
@@ -17,9 +17,13 @@ impl Tracer {
         }
     }
 
-    pub fn start_instruction(&self, inst: ELFInstruction) {
+    pub fn start_instruction(&self, inst: ELFInstruction<XLEN>) {
         let mut inst = inst;
-        inst.address = inst.address as u32 as u64;
+        // TODO(Maks) make const
+        if XLEN == 32 {
+            inst.address = inst.address as u32 as u64;
+        }
+        
         *self.open.try_borrow_mut().unwrap() = true;
         self.rows.try_borrow_mut().unwrap().push(RVTraceRow {
             instruction: inst,
@@ -31,7 +35,7 @@ impl Tracer {
         });
     }
 
-    pub fn capture_pre_state(&self, reg: [i64; 32], xlen: &Xlen) {
+    pub fn capture_pre_state(&self, reg: [i64; 32]) {
         if !*self.open.try_borrow().unwrap() {
             return;
         }
@@ -40,15 +44,15 @@ impl Tracer {
         let row = rows.last_mut().unwrap();
 
         if let Some(rs1) = row.instruction.rs1 {
-            row.register_state.rs1_val = Some(normalize_register_value(reg[rs1 as usize], xlen));
+            row.register_state.rs1_val = Some(normalize_register_value::<XLEN>(reg[rs1 as usize]));
         }
 
         if let Some(rs2) = row.instruction.rs2 {
-            row.register_state.rs2_val = Some(normalize_register_value(reg[rs2 as usize], xlen));
+            row.register_state.rs2_val = Some(normalize_register_value::<XLEN>(reg[rs2 as usize]));
         }
     }
 
-    pub fn capture_post_state(&self, reg: [i64; 32], xlen: &Xlen) {
+    pub fn capture_post_state(&self, reg: [i64; 32]) {
         if !*self.open.try_borrow().unwrap() {
             return;
         }
@@ -57,7 +61,7 @@ impl Tracer {
         let row = rows.last_mut().unwrap();
 
         if let Some(rd) = row.instruction.rd {
-            row.register_state.rd_post_val = Some(normalize_register_value(reg[rd as usize], xlen));
+            row.register_state.rd_post_val = Some(normalize_register_value::<XLEN>(reg[rd as usize]));
         }
     }
 
@@ -76,9 +80,11 @@ impl Tracer {
     }
 }
 
-fn normalize_register_value(value: i64, xlen: &Xlen) -> u64 {
-    match xlen {
-        Xlen::Bit32 => value as u32 as u64,
-        Xlen::Bit64 => value as u64,
+// TODO(Maks) make const
+fn normalize_register_value<const XLEN: u8>(value: i64) -> u64 {
+    match XLEN {
+        32 => value as u32 as u64,
+        64 => value as u64,
+        _ => panic!("incorrect XLEN")
     }
 }

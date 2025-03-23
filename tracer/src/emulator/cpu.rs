@@ -66,9 +66,8 @@ const MIP_STIP: u64 = 0x020;
 const MIP_SSIP: u64 = 0x002;
 
 /// Emulates a RISC-V CPU core
-pub struct Cpu {
+pub struct Cpu<const XLEN: u8> {
     clock: u64,
-    xlen: Xlen,
     privilege_mode: PrivilegeMode,
     wfi: bool,
     // using only lower 32bits of x, pc, and csr registers
@@ -77,19 +76,13 @@ pub struct Cpu {
     f: [f64; 32],
     pc: u64,
     csr: [u64; CSR_CAPACITY],
-    mmu: Mmu,
+    mmu: Mmu<XLEN>,
     reservation: u64, // @TODO: Should support multiple address reservations
     is_reservation_set: bool,
     _dump_flag: bool,
     decode_cache: DecodeCache,
     unsigned_data_mask: u64,
-    pub tracer: Rc<Tracer>,
-}
-
-#[derive(Clone)]
-pub enum Xlen {
-    Bit32,
-    Bit64, // @TODO: Support Bit128
+    pub tracer: Rc<Tracer<XLEN>>,
 }
 
 #[derive(Clone)]
@@ -190,10 +183,12 @@ fn _get_trap_type_name(trap_type: &TrapType) -> &'static str {
     }
 }
 
-fn get_trap_cause(trap: &Trap, xlen: &Xlen) -> u64 {
-    let interrupt_bit = match xlen {
-        Xlen::Bit32 => 0x80000000_u64,
-        Xlen::Bit64 => 0x8000000000000000_u64,
+fn get_trap_cause<const XLEN: u8>(trap: &Trap) -> u64 {
+    // TODO(Maks) make const
+    let interrupt_bit = match XLEN {
+        32 => 0x80000000_u64,
+        64 => 0x8000000000000000_u64,
+        _ => panic!("incorrect XLEN"),
     };
     match trap.trap_type {
         TrapType::InstructionAddressMisaligned => 0,
@@ -222,33 +217,45 @@ fn get_trap_cause(trap: &Trap, xlen: &Xlen) -> u64 {
     }
 }
 
-impl Cpu {
+impl<const XLEN: u8> Cpu<XLEN> {
     /// Creates a new `Cpu`.
     ///
     /// # Arguments
     /// * `Terminal`
     pub fn new(terminal: Box<dyn Terminal>) -> Self {
         let tracer = Rc::new(Tracer::new());
+
+        // TODO(Maks) make const
+        let unsigned_data_mask = match XLEN {
+            32 => 0xffffffff,
+            64 => 0xffffffffffffffff,
+            _ => panic!("incorrect XLEN")
+        };
+
         let mut cpu = Cpu {
             clock: 0,
-            xlen: Xlen::Bit64,
             privilege_mode: PrivilegeMode::Machine,
             wfi: false,
             x: [0; 32],
             f: [0.0; 32],
             pc: 0,
             csr: [0; CSR_CAPACITY],
-            mmu: Mmu::new(Xlen::Bit64, terminal, tracer.clone()),
+            mmu: Mmu::new(terminal, tracer.clone()),
             reservation: 0,
             is_reservation_set: false,
             _dump_flag: false,
             decode_cache: DecodeCache::new(),
-            unsigned_data_mask: 0xffffffffffffffff,
+            unsigned_data_mask,
             tracer,
         };
         cpu.x[0xb] = 0x1020; // I don't know why but Linux boot seems to require this initialization
         cpu.write_csr_raw(CSR_MISA_ADDRESS, 0x800000008014312f);
         cpu
+    }
+
+    // TODO(Maks) make const
+    pub fn xlen(&self) -> u8 {
+        XLEN
     }
 
     /// Updates Program Counter content
@@ -257,19 +264,6 @@ impl Cpu {
     /// * `value`
     pub fn update_pc(&mut self, value: u64) {
         self.pc = value;
-    }
-
-    /// Updates XLEN, 32-bit or 64-bit
-    ///
-    /// # Arguments
-    /// * `xlen`
-    pub fn update_xlen(&mut self, xlen: Xlen) {
-        self.xlen = xlen.clone();
-        self.unsigned_data_mask = match xlen {
-            Xlen::Bit32 => 0xffffffff,
-            Xlen::Bit64 => 0xffffffffffffffff,
-        };
-        self.mmu.update_xlen(xlen.clone());
     }
 
     /// Reads integer register content
@@ -334,16 +328,16 @@ impl Cpu {
         match self.decode(word).cloned() {
             Ok(inst) => {
                 // setup trace
-                let trace_inst = inst.trace.unwrap()(&inst, &self.xlen, word, instruction_address);
+                let trace_inst = inst.trace.unwrap()(&inst, word, instruction_address);
                 self.tracer.start_instruction(trace_inst);
-                self.tracer.capture_pre_state(self.x, &self.xlen);
+                self.tracer.capture_pre_state(self.x);
 
                 // execute
                 let result = (inst.operation)(self, word, instruction_address);
                 self.x[0] = 0; // hardwired zero
 
                 // complete trace
-                self.tracer.capture_post_state(self.x, &self.xlen);
+                self.tracer.capture_post_state(self.x);
                 self.tracer.end_instruction();
 
                 result
@@ -361,7 +355,7 @@ impl Cpu {
     /// [`Instruction`](struct.Instruction.html). Using [`DecodeCache`](struct.DecodeCache.html)
     /// so if cache hits this method returns the result very quickly.
     /// The result will be stored to cache.
-    fn decode(&mut self, word: u32) -> Result<&Instruction, ()> {
+    fn decode(&mut self, word: u32) -> Result<&Instruction<XLEN>, ()> {
         match self.decode_cache.get(word) {
             Some(index) => Ok(&INSTRUCTIONS[index]),
             None => match self.decode_and_get_instruction_index(word) {
@@ -378,7 +372,7 @@ impl Cpu {
     /// [`Instruction`](struct.Instruction.html). Not Using [`DecodeCache`](struct.DecodeCache.html)
     /// so if you don't want to pollute the cache you should use this method
     /// instead of `decode`.
-    fn decode_raw(&self, word: u32) -> Result<&Instruction, ()> {
+    fn decode_raw(&self, word: u32) -> Result<&Instruction<XLEN>, ()> {
         match self.decode_and_get_instruction_index(word) {
             Ok(index) => Ok(&INSTRUCTIONS[index]),
             Err(()) => Err(()),
@@ -391,7 +385,7 @@ impl Cpu {
     /// # Arguments
     /// * `word` word instruction data decoded
     fn decode_and_get_instruction_index(&self, word: u32) -> Result<usize, ()> {
-        for (i, inst) in INSTRUCTIONS.iter().enumerate().take(INSTRUCTION_NUM) {
+        for (i, inst) in INSTRUCTIONS::<XLEN>.iter().enumerate().take(INSTRUCTION_NUM) {
             if (word & inst.mask) == inst.data {
                 return Ok(i);
             }
@@ -513,7 +507,7 @@ impl Cpu {
 
     fn handle_trap(&mut self, trap: Trap, instruction_address: u64, is_interrupt: bool) -> bool {
         let current_privilege_encoding = get_privilege_encoding(&self.privilege_mode) as u64;
-        let cause = get_trap_cause(&trap, &self.xlen);
+        let cause = get_trap_cause::<XLEN>(&trap);
 
         // First, determine which privilege mode should handle the trap.
         // @TODO: Check if this logic is correct
@@ -843,12 +837,13 @@ impl Cpu {
     }
 
     fn update_addressing_mode(&mut self, value: u64) {
-        let addressing_mode = match self.xlen {
-            Xlen::Bit32 => match value & 0x80000000 {
+        // TODO(Maks) make const
+        let addressing_mode = match XLEN {
+            32 => match value & 0x80000000 {
                 0 => AddressingMode::None,
                 _ => AddressingMode::SV32,
             },
-            Xlen::Bit64 => match value >> 60 {
+            64 => match value >> 60 {
                 0 => AddressingMode::None,
                 8 => AddressingMode::SV39,
                 9 => AddressingMode::SV48,
@@ -857,10 +852,12 @@ impl Cpu {
                     panic!();
                 }
             },
+            _ => panic!("incorrect XLEN"),
         };
-        let ppn = match self.xlen {
-            Xlen::Bit32 => value & 0x3fffff,
-            Xlen::Bit64 => value & 0xfffffffffff,
+        let ppn = match XLEN {
+            32 => value & 0x3fffff,
+            64 => value & 0xfffffffffff,
+            _ => panic!("incorrect XLEN")
         };
         self.mmu.update_addressing_mode(addressing_mode);
         self.mmu.update_ppn(ppn);
@@ -868,9 +865,10 @@ impl Cpu {
 
     // @TODO: Rename to better name?
     fn sign_extend(&self, value: i64) -> i64 {
-        match self.xlen {
-            Xlen::Bit32 => value as i32 as i64,
-            Xlen::Bit64 => value,
+        match XLEN {
+            32 => value as i32 as i64,
+            64 => value,
+            _ => panic!("incorrect XLEN")
         }
     }
 
@@ -881,9 +879,10 @@ impl Cpu {
 
     // @TODO: Rename to better name?
     fn most_negative(&self) -> i64 {
-        match self.xlen {
-            Xlen::Bit32 => std::i32::MIN as i64,
-            Xlen::Bit64 => std::i64::MIN,
+        match XLEN {
+            32 => std::i32::MIN as i64,
+            64 => std::i64::MIN,
+            _ => panic!("incorrect XLEN")
         }
     }
 
@@ -1452,7 +1451,7 @@ impl Cpu {
     }
 
     /// Returns mutable `Mmu`
-    pub fn get_mut_mmu(&mut self) -> &mut Mmu {
+    pub fn get_mut_mmu(&mut self) -> &mut Mmu<XLEN> {
         &mut self.mmu
     }
 
@@ -1463,14 +1462,14 @@ impl Cpu {
 }
 
 #[derive(Debug, Clone)]
-pub struct Instruction {
+pub struct Instruction<const XLEN: u8> {
     pub mask: u32,
     pub data: u32, // @TODO: rename
     pub name: &'static str,
-    operation: fn(cpu: &mut Cpu, word: u32, address: u64) -> Result<(), Trap>,
-    disassemble: fn(cpu: &mut Cpu, word: u32, address: u64, evaluate: bool) -> String,
+    operation: fn(cpu: &mut Cpu<XLEN>, word: u32, address: u64) -> Result<(), Trap>,
+    disassemble: fn(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String,
     pub trace:
-        Option<fn(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction>,
+        Option<fn(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN>>,
 }
 
 struct FormatB {
@@ -1496,7 +1495,7 @@ fn parse_format_b(word: u32) -> FormatB {
     }
 }
 
-fn dump_format_b(cpu: &mut Cpu, word: u32, address: u64, evaluate: bool) -> String {
+fn dump_format_b<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
     let f = parse_format_b(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rs1));
@@ -1525,7 +1524,7 @@ fn parse_format_csr(word: u32) -> FormatCSR {
     }
 }
 
-fn dump_format_csr(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_csr<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_csr(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1565,7 +1564,7 @@ fn parse_format_i(word: u32) -> FormatI {
     }
 }
 
-fn dump_format_i(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_i<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_i(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1580,7 +1579,7 @@ fn dump_format_i(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> Str
     s
 }
 
-fn dump_format_i_mem(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_i_mem<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_i(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1616,7 +1615,7 @@ fn parse_format_j(word: u32) -> FormatJ {
     }
 }
 
-fn dump_format_j(cpu: &mut Cpu, word: u32, address: u64, evaluate: bool) -> String {
+fn dump_format_j<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
     let f = parse_format_j(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1641,7 +1640,7 @@ fn parse_format_r(word: u32) -> FormatR {
     }
 }
 
-fn dump_format_r(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_r<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_r(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1676,7 +1675,7 @@ fn parse_format_r2(word: u32) -> FormatR2 {
     }
 }
 
-fn dump_format_r2(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_r2<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_r2(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1720,7 +1719,7 @@ fn parse_format_s(word: u32) -> FormatS {
     }
 }
 
-fn dump_format_s(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_s<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_s(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rs2));
@@ -1754,7 +1753,7 @@ fn parse_format_u(word: u32) -> FormatU {
     }
 }
 
-fn dump_format_u(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_u<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     println!("f format: {:x}", word);
     let f = parse_format_u(word);
     let mut s = String::new();
@@ -1766,7 +1765,7 @@ fn dump_format_u(cpu: &mut Cpu, word: u32, _address: u64, evaluate: bool) -> Str
     s
 }
 
-fn dump_empty(_cpu: &mut Cpu, _word: u32, _address: u64, _evaluate: bool) -> String {
+fn dump_empty<const XLEN: u8>(_cpu: &mut Cpu<XLEN>, _word: u32, _address: u64, _evaluate: bool) -> String {
     String::new()
 }
 
@@ -1808,10 +1807,12 @@ fn get_register_name(num: usize) -> &'static str {
     }
 }
 
-fn normalize_u64(value: u64, width: &Xlen) -> u64 {
-    match width {
-        Xlen::Bit32 => value as u32 as u64,
-        Xlen::Bit64 => value,
+fn normalize_u64<const XLEN: u8>(value: u64) -> u64 {
+    // TODO(Maks) make const
+    match XLEN {
+        32 => value as u32 as u64,
+        64 => value,
+        _ => panic!("incorrect XLEN")
     }
 }
 
@@ -1819,11 +1820,11 @@ fn normalize_register(value: usize) -> u64 {
     value.try_into().unwrap()
 }
 
-fn trace_r(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_r<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_r(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: None,
         rs1: Some(normalize_register(f.rs1)),
         rs2: Some(normalize_register(f.rs2)),
@@ -1832,11 +1833,11 @@ fn trace_r(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
     }
 }
 
-fn trace_i(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_i<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_i(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: Some(f.imm),
         rs1: Some(normalize_register(f.rs1)),
         rs2: None,
@@ -1845,11 +1846,11 @@ fn trace_i(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
     }
 }
 
-fn trace_s(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_s<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_s(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: Some(f.imm),
         rs1: Some(normalize_register(f.rs1)),
         rs2: Some(normalize_register(f.rs2)),
@@ -1858,11 +1859,11 @@ fn trace_s(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
     }
 }
 
-fn trace_b(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_b<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_b(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: Some(f.imm),
         rs1: Some(normalize_register(f.rs1)),
         rs2: Some(normalize_register(f.rs2)),
@@ -1871,11 +1872,11 @@ fn trace_b(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
     }
 }
 
-fn trace_u(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_u<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_u(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: Some(f.imm),
         rs1: None,
         rs2: None,
@@ -1885,11 +1886,11 @@ fn trace_u(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
 }
 
 // (UJ)
-fn trace_j(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstruction {
+fn trace_j<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_j(word);
     ELFInstruction {
-        opcode: RV32IM::from_str(inst.name).unwrap(),
-        address: normalize_u64(address, xlen),
+        opcode: RV_IM::from_str(inst.name).unwrap(),
+        address: normalize_u64::<XLEN>(address),
         imm: Some(f.imm),
         rs1: None,
         rs2: None,
@@ -1901,7 +1902,7 @@ fn trace_j(inst: &Instruction, xlen: &Xlen, word: u32, address: u64) -> ELFInstr
 const INSTRUCTION_NUM: usize = 116;
 
 // @TODO: Reorder in often used order as
-pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
+pub const INSTRUCTIONS<const XLEN: u8>: [Instruction<{XLEN}>; INSTRUCTION_NUM] = [
     Instruction {
         mask: 0xfe00707f,
         data: 0x00000033,
@@ -3119,9 +3120,10 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "MULH",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            cpu.x[f.rd] = match cpu.xlen {
-                Xlen::Bit32 => cpu.sign_extend((cpu.x[f.rs1] * cpu.x[f.rs2]) >> 32),
-                Xlen::Bit64 => (((cpu.x[f.rs1] as i128) * (cpu.x[f.rs2] as i128)) >> 64) as i64,
+            cpu.x[f.rd] = match cpu.xlen() {
+                32 => cpu.sign_extend((cpu.x[f.rs1] * cpu.x[f.rs2]) >> 32),
+                64 => (((cpu.x[f.rs1] as i128) * (cpu.x[f.rs2] as i128)) >> 64) as i64,
+                _ => panic!("incorrect XLEN")
             };
             Ok(())
         },
@@ -3134,14 +3136,15 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "MULHU",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            cpu.x[f.rd] = match cpu.xlen {
-                Xlen::Bit32 => cpu.sign_extend(
+            cpu.x[f.rd] = match cpu.xlen() {
+                32 => cpu.sign_extend(
                     (((cpu.x[f.rs1] as u32 as u64) * (cpu.x[f.rs2] as u32 as u64)) >> 32) as i64,
                 ),
-                Xlen::Bit64 => {
+                64 => {
                     ((cpu.x[f.rs1] as u64 as u128).wrapping_mul(cpu.x[f.rs2] as u64 as u128) >> 64)
                         as i64
                 }
+                _ => panic!("incorrect XLEN")
             };
             Ok(())
         },
@@ -3154,13 +3157,14 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "MULHSU",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            cpu.x[f.rd] = match cpu.xlen {
-                Xlen::Bit32 => cpu.sign_extend(
+            cpu.x[f.rd] = match cpu.xlen() {
+                32 => cpu.sign_extend(
                     ((cpu.x[f.rs1] as i64).wrapping_mul(cpu.x[f.rs2] as u32 as i64) >> 32) as i64,
                 ),
-                Xlen::Bit64 => {
+                64 => {
                     ((cpu.x[f.rs1] as u128).wrapping_mul(cpu.x[f.rs2] as u64 as u128) >> 64) as i64
                 }
+                _ => panic!("incorrect XLEN")
             };
             Ok(())
         },
@@ -3422,9 +3426,10 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "SLLI",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            let mask = match cpu.xlen {
-                Xlen::Bit32 => 0x1f,
-                Xlen::Bit64 => 0x3f,
+            let mask = match cpu.xlen() {
+                32 => 0x1f,
+                64 => 0x3f,
+                _ => panic!("incorrect XLEN")
             };
             let shamt = (word >> 20) & mask;
             cpu.x[f.rd] = cpu.sign_extend(cpu.x[f.rs1] << shamt);
@@ -3536,9 +3541,10 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "SRAI",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            let mask = match cpu.xlen {
-                Xlen::Bit32 => 0x1f,
-                Xlen::Bit64 => 0x3f,
+            let mask = match cpu.xlen() {
+                32 => 0x1f,
+                64 => 0x3f,
+                _ => panic!("incorrect XLEN")
             };
             let shamt = (word >> 20) & mask;
             cpu.x[f.rd] = cpu.sign_extend(cpu.x[f.rs1] >> shamt);
@@ -3625,9 +3631,10 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "SRLI",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            let mask = match cpu.xlen {
-                Xlen::Bit32 => 0x1f,
-                Xlen::Bit64 => 0x3f,
+            let mask = match cpu.xlen() {
+                32 => 0x1f,
+                64 => 0x3f,
+                _ => panic!("incorrect XLEN")
             };
             let shamt = (word >> 20) & mask;
             cpu.x[f.rd] = cpu.sign_extend((cpu.unsigned_data(cpu.x[f.rs1]) >> shamt) as i64);
@@ -3642,9 +3649,10 @@ pub const INSTRUCTIONS: [Instruction; INSTRUCTION_NUM] = [
         name: "SRLIW",
         operation: |cpu, word, _address| {
             let f = parse_format_r(word);
-            let mask = match cpu.xlen {
-                Xlen::Bit32 => 0x1f,
-                Xlen::Bit64 => 0x3f,
+            let mask = match cpu.xlen() {
+                32 => 0x1f,
+                64 => 0x3f,
+                _ => panic!("incorrect XLEN")
             };
             let shamt = (word >> 20) & mask;
             cpu.x[f.rd] = ((cpu.x[f.rs1] as u32) >> shamt) as i32 as i64;
@@ -3960,11 +3968,11 @@ mod test_cpu {
     #[test]
     fn update_xlen() {
         let mut cpu = create_cpu();
-        assert!(matches!(cpu.xlen, Xlen::Bit64));
-        cpu.update_xlen(Xlen::Bit32);
-        assert!(matches!(cpu.xlen, Xlen::Bit32));
-        cpu.update_xlen(Xlen::Bit64);
-        assert!(matches!(cpu.xlen, Xlen::Bit64));
+        assert!(matches!(cpu.xlen(), 64));
+        cpu.update_xlen(32);
+        assert!(matches!(cpu.xlen(), 32));
+        cpu.update_xlen(64);
+        assert!(matches!(cpu.xlen(), 64));
         // Note: cpu.update_xlen() updates cpu.mmu.xlen, too.
         // The test for mmu.xlen should be in Mmu?
     }

@@ -13,7 +13,7 @@ use common::rv_trace::{JoltDevice, MemoryState};
 
 use self::fnv::FnvHashMap;
 
-use super::cpu::{get_privilege_mode, PrivilegeMode, Trap, TrapType, Xlen};
+use super::cpu::{get_privilege_mode, PrivilegeMode, Trap, TrapType};
 use super::device::clint::Clint;
 use super::device::plic::Plic;
 use super::device::uart::Uart;
@@ -26,13 +26,12 @@ use super::terminal::Terminal;
 /// It also manages virtual-physical address translation and memory protection.
 /// It may also be said Bus.
 /// @TODO: Memory protection is not implemented yet. We should support.
-pub struct Mmu {
+pub struct Mmu<const XLEN: u8> {
     clock: u64,
-    xlen: Xlen,
     ppn: u64,
     addressing_mode: AddressingMode,
     privilege_mode: PrivilegeMode,
-    memory: MemoryWrapper,
+    memory: MemoryWrapper<XLEN>,
     dtb: Vec<u8>,
     disk: VirtioBlockDisk,
     plic: Plic,
@@ -40,7 +39,7 @@ pub struct Mmu {
     uart: Uart,
 
     pub jolt_device: JoltDevice,
-    tracer: Rc<Tracer>,
+    tracer: Rc<Tracer<XLEN>>,
 
     /// Address translation can be affected `mstatus` (MPRV, MPP in machine mode)
     /// then `Mmu` has copy of it.
@@ -86,14 +85,14 @@ fn _get_addressing_mode_name(mode: &AddressingMode) -> &'static str {
     }
 }
 
-impl Mmu {
+impl<const XLEN: u8> Mmu<XLEN> {
     /// Creates a new `Mmu`.
     ///
     /// # Arguments
     /// * `xlen`
     /// * `terminal`
     /// * `tracer`
-    pub fn new(xlen: Xlen, terminal: Box<dyn Terminal>, tracer: Rc<Tracer>) -> Self {
+    pub fn new(terminal: Box<dyn Terminal>, tracer: Rc<Tracer<XLEN>>) -> Self {
         let mut dtb = vec![0; DTB_SIZE];
 
         // Load default device tree binary content
@@ -102,7 +101,6 @@ impl Mmu {
 
         Mmu {
             clock: 0,
-            xlen,
             ppn: 0,
             addressing_mode: AddressingMode::None,
             privilege_mode: PrivilegeMode::Machine,
@@ -120,15 +118,6 @@ impl Mmu {
             load_page_cache: FnvHashMap::default(),
             store_page_cache: FnvHashMap::default(),
         }
-    }
-
-    /// Updates XLEN, 32-bit or 64-bit
-    ///
-    /// # Arguments
-    /// * `xlen`
-    pub fn update_xlen(&mut self, xlen: Xlen) {
-        self.xlen = xlen;
-        self.clear_page_cache();
     }
 
     /// Initializes Main memory. This method is expected to be called only once.
@@ -224,9 +213,11 @@ impl Mmu {
     }
 
     fn get_effective_address(&self, address: u64) -> u64 {
-        match self.xlen {
-            Xlen::Bit32 => address & 0xffffffff,
-            Xlen::Bit64 => address,
+        // TODO(Maks) make const
+        match XLEN {
+            32 => address & 0xffffffff,
+            64 => address,
+            _ => panic!("incorrect XLEN"),
         }
     }
 
@@ -553,9 +544,11 @@ impl Mmu {
     /// state is used in Jolt to construct the witnesses in `read_write_memory.rs`.
     fn trace_load(&mut self, effective_address: u64) {
         let word_address = (effective_address >> 2) << 2;
-        let bytes = match self.xlen {
-            Xlen::Bit32 => 4,
-            Xlen::Bit64 => 8,
+        // TODO(Maks) make const
+        let bytes = match XLEN {
+            32 => 4,
+            64 => 8,
+            _ => panic!("incorrect XLEN"),
         };
         if word_address < DRAM_BASE {
             if self.jolt_device.is_input(word_address) {
@@ -589,9 +582,11 @@ impl Mmu {
     /// construct the witnesses in `read_write_memory.rs`.
     fn trace_store_byte(&mut self, effective_address: u64, value: u64) {
         self.assert_effective_address(effective_address);
-        let bytes = match self.xlen {
-            Xlen::Bit32 => 4,
-            Xlen::Bit64 => 8,
+        // TODO(Maks) make const
+        let bytes = match XLEN {
+            32 => 4,
+            64 => 8,
+            _ => panic!("incorrect XLEN"),
         };
         let word_address = (effective_address >> 2) << 2;
 
@@ -630,9 +625,11 @@ impl Mmu {
     /// construct the witnesses in `read_write_memory.rs`.
     fn trace_store_halfword(&mut self, effective_address: u64, value: u64) {
         self.assert_effective_address(effective_address);
-        let bytes = match self.xlen {
-            Xlen::Bit32 => 4,
-            Xlen::Bit64 => 8,
+        // TODO(Maks) make const
+        let bytes = match XLEN {
+            32 => 4,
+            64 => 8,
+            _ => panic!("incorrect XLEN"),
         };
         let word_address = (effective_address >> 2) << 2;
 
@@ -671,9 +668,11 @@ impl Mmu {
     /// in `read_write_memory.rs`.
     fn trace_store(&mut self, effective_address: u64, value: u64) {
         self.assert_effective_address(effective_address);
-        let bytes = match self.xlen {
-            Xlen::Bit32 => 4,
-            Xlen::Bit64 => 8,
+        // TODO(Maks) make const
+        let bytes = match XLEN {
+            32 => 4,
+            64 => 8,
+            _ => panic!("incorrect XLEN"),
         };
 
         if effective_address < DRAM_BASE {
@@ -1154,13 +1153,13 @@ impl Mmu {
 
 /// [`Memory`](../memory/struct.Memory.html) wrapper. Converts physical address to the one in memory
 /// using [`DRAM_BASE`](constant.DRAM_BASE.html) and accesses [`Memory`](../memory/struct.Memory.html).
-pub struct MemoryWrapper {
+pub struct MemoryWrapper<const XLEN: u8> {
     memory: Memory,
-    tracer: Rc<Tracer>,
+    tracer: Rc<Tracer<XLEN>>,
 }
 
-impl MemoryWrapper {
-    fn new(tracer: Rc<Tracer>) -> Self {
+impl<const XLEN: u8> MemoryWrapper<XLEN> {
+    fn new(tracer: Rc<Tracer<XLEN>>) -> Self {
         MemoryWrapper {
             memory: Memory::new(),
             tracer,

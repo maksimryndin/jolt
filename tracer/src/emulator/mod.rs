@@ -2,9 +2,7 @@
 const TEST_MEMORY_CAPACITY: u64 = 1024 * 512;
 const PROGRAM_MEMORY_CAPACITY: u64 = 1024 * 1024 * 128; // big enough to run Linux and xv6
 
-extern crate fnv;
-
-use self::fnv::FnvHashMap;
+use fnv::FnvHashMap;
 
 pub mod cpu;
 pub mod default_terminal;
@@ -14,7 +12,7 @@ pub mod memory;
 pub mod mmu;
 pub mod terminal;
 
-use self::cpu::{Cpu, Xlen};
+use self::cpu::Cpu;
 use self::elf_analyzer::ElfAnalyzer;
 use self::terminal::Terminal;
 
@@ -31,8 +29,8 @@ use self::terminal::Terminal;
 /// // Go!
 /// emulator.run();
 /// ```
-pub struct Emulator {
-    cpu: Cpu,
+pub struct Emulator<const XLEN: u8> {
+    cpu: Cpu<XLEN>,
 
     /// Stores mapping from symbol to virtual address
     symbol_map: FnvHashMap<String, u64>,
@@ -47,7 +45,7 @@ pub struct Emulator {
     tohost_addr: u64,
 }
 
-impl Emulator {
+impl<const XLEN: u8> Emulator<XLEN> {
     /// Creates a new `Emulator`. [`Terminal`](terminal/trait.Terminal.html)
     /// is internally used for transferring input/output data to/from `Emulator`.
     ///
@@ -184,12 +182,7 @@ impl Emulator {
 
         // Detected whether the elf file is riscv-tests.
         // Setting up CPU and Memory depending on it.
-
-        self.cpu.update_xlen(match header.e_width {
-            32 => Xlen::Bit32,
-            64 => Xlen::Bit64,
-            _ => panic!("No happen"),
-        });
+        debug_assert_eq!(header.e_width, XLEN, "object header bit width should be equal to register width {}", XLEN);
 
         if self.tohost_addr != 0 {
             self.is_test = true;
@@ -274,14 +267,6 @@ impl Emulator {
         self.cpu.get_mut_mmu().init_dtb(content);
     }
 
-    /// Updates XLEN (the width of an integer register in bits) in CPU.
-    ///
-    /// # Arguments
-    /// * `xlen`
-    pub fn update_xlen(&mut self, xlen: Xlen) {
-        self.cpu.update_xlen(xlen);
-    }
-
     /// Enables or disables page cache optimization.
     /// Page cache optimization is experimental feature.
     /// See [`Mmu`](./mmu/struct.Mmu.html) for the detail.
@@ -298,12 +283,12 @@ impl Emulator {
     }
 
     /// Returns immutable reference to `Cpu`.
-    pub fn get_cpu(&self) -> &Cpu {
+    pub fn get_cpu(&self) -> &Cpu<XLEN> {
         &self.cpu
     }
 
     /// Returns mutable reference to `Cpu`.
-    pub fn get_mut_cpu(&mut self) -> &mut Cpu {
+    pub fn get_mut_cpu(&mut self) -> &mut Cpu<XLEN> {
         &mut self.cpu
     }
 
