@@ -7,7 +7,7 @@ use strum::EnumCount;
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter, FromRepr};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RVTraceRow<const WORD_SIZE: u8> {
+pub struct RVTraceRow<const WORD_SIZE: usize> {
     pub instruction: ELFInstruction<WORD_SIZE>,
     pub register_state: RegisterState,
     pub memory_state: Option<MemoryState>,
@@ -45,7 +45,7 @@ fn sum_u64_i32(a: u64, b: i32) -> u64 {
     }
 }
 
-impl<const WORD_SIZE: u8> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
+impl<const WORD_SIZE: usize> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
     fn from(val: &RVTraceRow<WORD_SIZE>) -> Self {
         use RV_IM::*;
         // TODO(Maks) add 64 bit instructions
@@ -198,7 +198,7 @@ impl<const WORD_SIZE: u8> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_OPS
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ELFInstruction<const WORD_SIZE: u8> {
+pub struct ELFInstruction<const WORD_SIZE: usize> {
     pub address: u64,
     pub opcode: RV_IM<WORD_SIZE>,
     pub rs1: Option<u64>,
@@ -246,7 +246,7 @@ pub enum CircuitFlags {
 }
 pub const NUM_CIRCUIT_FLAGS: usize = CircuitFlags::COUNT;
 
-impl<const WORD_SIZE: u8> ELFInstruction<WORD_SIZE> {
+impl<const WORD_SIZE: usize> ELFInstruction<WORD_SIZE> {
     #[rustfmt::skip]
     pub fn to_circuit_flags(&self) -> [bool; NUM_CIRCUIT_FLAGS] {
         use RV_IM::*;
@@ -393,13 +393,13 @@ pub enum MemoryState {
     },
 }
 
-impl<const WORD_SIZE: u8> RVTraceRow<WORD_SIZE> {
-    pub fn imm_u64(&self) -> u64 {
-        self.instruction.imm.unwrap() as u64
-    }
-
-    pub fn imm_u32(&self) -> u32 {
-        self.instruction.imm.unwrap() as u64 as u32
+impl<const WORD_SIZE: usize> RVTraceRow<WORD_SIZE> {
+    pub fn imm(&self) -> u64 {
+        if WORD_SIZE == 32 {
+            self.instruction.imm.unwrap() as u64 as u32 as u64
+        } else {
+            self.instruction.imm.unwrap() as u64
+        }
     }
 }
 
@@ -407,7 +407,7 @@ impl<const WORD_SIZE: u8> RVTraceRow<WORD_SIZE> {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromRepr, Serialize, Deserialize, Hash)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
-pub enum RV_IM<const WORD_SIZE: u8> {
+pub enum RV_IM<const WORD_SIZE: usize> {
     ADD,
     SUB,
     XOR,
@@ -472,7 +472,7 @@ pub enum RV_IM<const WORD_SIZE: u8> {
     VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
 }
 
-impl<const WORD_SIZE: u8> FromStr for RV_IM<WORD_SIZE> {
+impl<const WORD_SIZE: usize> FromStr for RV_IM<WORD_SIZE> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<RV_IM<WORD_SIZE>, String> {
