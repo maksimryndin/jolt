@@ -7,7 +7,7 @@ use crate::jolt::subtable::div_by_zero::DivByZeroSubtable;
 use crate::jolt::subtable::low_bit::LowBitSubtable;
 use crate::jolt::subtable::right_is_zero::RightIsZeroSubtable;
 use crate::poly::commitment::hyperkzg::HyperKZG;
-use crate::r1cs::constraints::JoltRV32IMConstraints;
+use crate::r1cs::constraints::JoltRV_IMConstraints;
 use crate::r1cs::inputs::JoltR1CSInputs;
 use ark_bn254::{Bn254, Fr};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -46,13 +46,13 @@ macro_rules! instruction_set {
         #[repr(u8)]
         #[derive(Copy, Clone, Debug, PartialEq, EnumIter, EnumCountMacro, Serialize, Deserialize)]
         #[enum_dispatch(JoltInstruction)]
-        pub enum $enum_name {
+        pub enum $enum_name<const WORD_SIZE: usize> {
             $($alias($struct)),+
         }
-        impl JoltInstructionSet for $enum_name {}
-        impl $enum_name {
+        impl<const WORD_SIZE: usize> JoltInstructionSet<WORD_SIZE> for $enum_name<WORD_SIZE> {}
+        impl<const WORD_SIZE: usize> $enum_name<WORD_SIZE> {
             pub fn random_instruction(rng: &mut StdRng) -> Self {
-                let index = rng.next_u64() as usize % $enum_name::COUNT;
+                let index = rng.next_u64() as usize % $enum_name::<WORD_SIZE>::COUNT;
                 let instruction = $enum_name::iter()
                     .enumerate()
                     .filter(|(i, _)| *i == index)
@@ -63,7 +63,7 @@ macro_rules! instruction_set {
             }
         }
         // Need a default so that we can derive EnumIter on `JoltR1CSInputs`
-        impl Default for $enum_name {
+        impl<const WORD_SIZE: usize> Default for $enum_name<WORD_SIZE> {
             fn default() -> Self {
                 $enum_name::iter().collect::<Vec<_>>()[0]
             }
@@ -79,8 +79,8 @@ macro_rules! subtable_enum {
         #[repr(u8)]
         #[enum_dispatch(LassoSubtable<F>)]
         #[derive(EnumCountMacro, EnumIter)]
-        pub enum $enum_name<F: JoltField> { $($alias($struct)),+ }
-        impl<F: JoltField> From<SubtableId> for $enum_name<F> {
+        pub enum $enum_name<const WORD_SIZE: usize, F: JoltField> { $($alias($struct)),+ }
+        impl<const WORD_SIZE: usize, F: JoltField> From<SubtableId> for $enum_name<WORD_SIZE, F> {
           fn from(subtable_id: SubtableId) -> Self {
             $(
               if subtable_id == TypeId::of::<$struct>() {
@@ -91,21 +91,19 @@ macro_rules! subtable_enum {
           }
         }
 
-        impl<F: JoltField> From<$enum_name<F>> for usize {
-            fn from(subtable: $enum_name<F>) -> usize {
+        impl<const WORD_SIZE: usize, F: JoltField> From<$enum_name<WORD_SIZE, F>> for usize {
+            fn from(subtable: $enum_name<WORD_SIZE, F>) -> usize {
                 // Discriminant: https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-                let byte = unsafe { *(&subtable as *const $enum_name<F> as *const u8) };
+                let byte = unsafe { *(&subtable as *const $enum_name<WORD_SIZE, F> as *const u8) };
                 byte as usize
             }
         }
-        impl<F: JoltField> JoltSubtableSet<F> for $enum_name<F> {}
+        impl<const WORD_SIZE: usize, F: JoltField> JoltSubtableSet<F> for $enum_name<WORD_SIZE, F> {}
     };
 }
 
-const WORD_SIZE: usize = 32;
-
 instruction_set!(
-  RV32I,
+  RV_I,
   ADD: ADDInstruction<WORD_SIZE>,
   SUB: SUBInstruction<WORD_SIZE>,
   AND: ANDInstruction<WORD_SIZE>,
@@ -134,7 +132,7 @@ instruction_set!(
   VIRTUAL_ASSERT_WORD_ALIGNMENT: AssertAlignedMemoryAccessInstruction<WORD_SIZE, 4>
 );
 subtable_enum!(
-  RV32ISubtables,
+  RV_ISubtables,
   AND: AndSubtable<F>,
   EQ_ABS: EqAbsSubtable<F>,
   EQ: EqSubtable<F>,
@@ -164,24 +162,24 @@ subtable_enum!(
 
 // ==================== JOLT ====================
 
-pub enum RV32IJoltVM {}
+pub enum RV_IJoltVM<const WORD_SIZE: usize> {}
 
 pub const C: usize = 4;
 pub const M: usize = 1 << 16;
 
-impl<F, PCS, ProofTranscript> Jolt<F, PCS, C, M, ProofTranscript> for RV32IJoltVM
+impl<const WORD_SIZE: usize, F, PCS, ProofTranscript> Jolt<F, PCS, C, M, WORD_SIZE, ProofTranscript> for RV_IJoltVM<WORD_SIZE>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     ProofTranscript: Transcript,
 {
-    type InstructionSet = RV32I;
-    type Subtables = RV32ISubtables<F>;
-    type Constraints = JoltRV32IMConstraints;
+    type InstructionSet = RV_I<WORD_SIZE>;
+    type Subtables = RV_ISubtables<WORD_SIZE, F>;
+    type Constraints = JoltRV_IMConstraints<WORD_SIZE>;
 }
 
-pub type RV32IJoltProof<F, PCS, ProofTranscript> =
-    JoltProof<C, M, JoltR1CSInputs, F, PCS, RV32I, RV32ISubtables<F>, ProofTranscript>;
+pub type RV_IJoltProof<const WORD_SIZE: usize, F, PCS, ProofTranscript> =
+    JoltProof<C, M, JoltR1CSInputs, F, PCS, RV_I<WORD_SIZE>, RV_ISubtables<WORD_SIZE, F>, ProofTranscript>;
 
 use crate::utils::transcript::{KeccakTranscript, Transcript};
 use eyre::Result;
@@ -227,12 +225,12 @@ pub trait Serializable: CanonicalSerialize + CanonicalDeserialize + Sized {
 pub type ProofTranscript = KeccakTranscript;
 pub type PCS = HyperKZG<Bn254, ProofTranscript>;
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
-pub struct JoltHyperKZGProof {
-    pub proof: RV32IJoltProof<Fr, PCS, ProofTranscript>,
+pub struct JoltHyperKZGProof<const WORD_SIZE: usize> {
+    pub proof: RV_IJoltProof<WORD_SIZE, Fr, PCS, ProofTranscript>,
     pub commitments: JoltCommitments<PCS, ProofTranscript>,
 }
 
-impl Serializable for JoltHyperKZGProof {}
+impl<const WORD_SIZE: usize> Serializable for JoltHyperKZGProof<WORD_SIZE> {}
 
 // ==================== TEST ====================
 

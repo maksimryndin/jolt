@@ -1,5 +1,5 @@
 use common::constants::virtual_register_index;
-use tracer::{ELFInstruction, RVTraceRow, RegisterState, RV32IM};
+use tracer::{ELFInstruction, RVTraceRow, RegisterState, RV_IM};
 
 use super::VirtualInstructionSequence;
 use crate::jolt::instruction::{
@@ -9,11 +9,11 @@ use crate::jolt::instruction::{
 
 pub struct MULHInstruction<const WORD_SIZE: usize>;
 
-impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD_SIZE> {
+impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for MULHInstruction<WORD_SIZE> {
     const SEQUENCE_LENGTH: usize = 7;
-
-    fn virtual_trace(trace_row: RVTraceRow) -> Vec<RVTraceRow> {
-        assert_eq!(trace_row.instruction.opcode, RV32IM::MULH);
+    
+    fn virtual_trace(trace_row: RVTraceRow<WORD_SIZE>) -> Vec<RVTraceRow<WORD_SIZE>> {
+        assert_eq!(trace_row.instruction.opcode, RV_IM::MULH);
         // MULH source registers
         let r_x = trace_row.instruction.rs1;
         let r_y = trace_row.instruction.rs2;
@@ -34,7 +34,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_MOVSIGN,
+                opcode: RV_IM::VIRTUAL_MOVSIGN,
                 rs1: r_x,
                 rs2: None,
                 rd: v_sx,
@@ -56,7 +56,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_MOVSIGN,
+                opcode: RV_IM::VIRTUAL_MOVSIGN,
                 rs1: r_y,
                 rs2: None,
                 rd: v_sy,
@@ -78,7 +78,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::MULHU,
+                opcode: RV_IM::MULHU,
                 rs1: r_x,
                 rs2: r_y,
                 rd: v_0,
@@ -100,7 +100,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::MULU,
+                opcode: RV_IM::MULU,
                 rs1: v_sx,
                 rs2: r_y,
                 rd: v_1,
@@ -122,7 +122,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::MULU,
+                opcode: RV_IM::MULU,
                 rs1: v_sy,
                 rs2: r_x,
                 rd: v_2,
@@ -144,7 +144,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::ADD,
+                opcode: RV_IM::ADD,
                 rs1: v_0,
                 rs2: v_1,
                 rd: v_3,
@@ -166,7 +166,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for MULHInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::ADD,
+                opcode: RV_IM::ADD,
                 rs1: v_3,
                 rs2: v_2,
                 rd: trace_row.instruction.rd,
@@ -208,6 +208,6 @@ mod test {
 
     #[test]
     fn mulh_virtual_sequence_32() {
-        jolt_virtual_sequence_test!(MULHInstruction::<32>, RV32IM::MULH);
+        jolt_virtual_sequence_test!(MULHInstruction::<32>, RV_IM::MULH);
     }
 }

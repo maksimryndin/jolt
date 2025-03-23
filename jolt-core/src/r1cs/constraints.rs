@@ -11,7 +11,7 @@ use crate::{
             virtual_assert_aligned_memory_access::AssertAlignedMemoryAccessInstruction,
             virtual_move::MOVEInstruction, virtual_movsign::MOVSIGNInstruction,
         },
-        vm::rv32i_vm::RV32I,
+        vm::rv_i_vm::RV_I,
     },
 };
 
@@ -55,12 +55,15 @@ pub trait R1CSConstraints<const C: usize, F: JoltField> {
     fn cross_step_constraints() -> Vec<OffsetEqConstraint>;
 }
 
-pub struct JoltRV32IMConstraints;
-impl<const C: usize, F: JoltField> R1CSConstraints<C, F> for JoltRV32IMConstraints {
-    type Inputs = JoltR1CSInputs;
+pub struct JoltRV_IMConstraints<const WORD_SIZE: usize>;
+
+impl<const WORD_SIZE: usize, const C: usize, F: JoltField> R1CSConstraints<C, F> for JoltRV_IMConstraints<WORD_SIZE> {
+    type Inputs = JoltR1CSInputs<WORD_SIZE>;
 
     fn uniform_constraints(cs: &mut R1CSBuilder<C, F, Self::Inputs>, memory_start: u64) {
-        for flag in RV32I::iter() {
+        use JoltR1CSInputs<WORD_SIZE> as JoltR1CSInputs;
+
+        for flag in RV_I::<WORD_SIZE>::iter() {
             cs.constrain_binary(JoltR1CSInputs::InstructionFlags(flag));
         }
         for flag in CircuitFlags::iter() {
@@ -69,10 +72,11 @@ impl<const C: usize, F: JoltField> R1CSConstraints<C, F> for JoltRV32IMConstrain
 
         let flags = CircuitFlags::iter()
             .map(|flag| JoltR1CSInputs::OpFlags(flag).into())
-            .chain(RV32I::iter().map(|flag| JoltR1CSInputs::InstructionFlags(flag).into()))
+            .chain(RV_I::<WORD_SIZE>::iter().map(|flag| JoltR1CSInputs::InstructionFlags(flag).into()))
             .collect();
         cs.constrain_pack_be(flags, JoltR1CSInputs::Bytecode_Bitflags, 1);
 
+        // TODO(Maks) check for rv64
         let real_pc =
             4i64 * JoltR1CSInputs::Bytecode_ELFAddress + (PC_START_ADDRESS - PC_NOOP_SHIFT);
         let x = cs.allocate_if_else(
@@ -90,6 +94,7 @@ impl<const C: usize, F: JoltField> R1CSConstraints<C, F> for JoltRV32IMConstrain
 
         let is_load_or_store = JoltR1CSInputs::OpFlags(CircuitFlags::Load)
             + JoltR1CSInputs::OpFlags(CircuitFlags::Store);
+        // TODO(Maks) check for rv 64
         let memory_start: i64 = memory_start.try_into().unwrap();
         cs.constrain_eq_conditional(
             is_load_or_store,
@@ -123,10 +128,10 @@ impl<const C: usize, F: JoltField> R1CSConstraints<C, F> for JoltRV32IMConstrain
         // to obtain the memory address being accessed.
         let add_operands = JoltR1CSInputs::InstructionFlags(ADDInstruction::default().into())
             + JoltR1CSInputs::InstructionFlags(
-                AssertAlignedMemoryAccessInstruction::<32, 2>::default().into(),
+                AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 2>::default().into(),
             )
             + JoltR1CSInputs::InstructionFlags(
-                AssertAlignedMemoryAccessInstruction::<32, 4>::default().into(),
+                AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 4>::default().into(),
             );
         cs.constrain_eq_conditional(add_operands, packed_query.clone(), x + y);
         // Converts from unsigned to twos-complement representation

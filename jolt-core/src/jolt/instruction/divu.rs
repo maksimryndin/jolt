@@ -1,5 +1,5 @@
 use common::constants::virtual_register_index;
-use tracer::{ELFInstruction, RVTraceRow, RegisterState, RV32IM};
+use tracer::{ELFInstruction, RVTraceRow, RegisterState, RV_IM};
 
 use super::VirtualInstructionSequence;
 use crate::jolt::instruction::{
@@ -12,11 +12,11 @@ use crate::jolt::instruction::{
 /// Perform unsigned division and return quotient
 pub struct DIVUInstruction<const WORD_SIZE: usize>;
 
-impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD_SIZE> {
+impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for DIVUInstruction<WORD_SIZE> {
     const SEQUENCE_LENGTH: usize = 9;
-
-    fn virtual_trace(trace_row: RVTraceRow) -> Vec<RVTraceRow> {
-        assert_eq!(trace_row.instruction.opcode, RV32IM::DIVU);
+    
+    fn virtual_trace(trace_row: RVTraceRow<WORD_SIZE>) -> Vec<RVTraceRow<WORD_SIZE>> {
+        assert_eq!(trace_row.instruction.opcode, RV_IM::DIVU);
         // DIVU source registers
         let r_x = trace_row.instruction.rs1;
         let r_y = trace_row.instruction.rs2;
@@ -46,7 +46,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ADVICE,
+                opcode: RV_IM::VIRTUAL_ADVICE,
                 rs1: None,
                 rs2: None,
                 rd: v_q,
@@ -68,7 +68,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ADVICE,
+                opcode: RV_IM::VIRTUAL_ADVICE,
                 rs1: None,
                 rs2: None,
                 rd: v_r,
@@ -90,7 +90,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::MULU,
+                opcode: RV_IM::MULU,
                 rs1: v_q,
                 rs2: r_y,
                 rd: v_qy,
@@ -113,7 +113,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER,
+                opcode: RV_IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER,
                 rs1: v_r,
                 rs2: r_y,
                 rd: None,
@@ -136,7 +136,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ASSERT_LTE,
+                opcode: RV_IM::VIRTUAL_ASSERT_LTE,
                 rs1: v_qy,
                 rs2: r_x,
                 rd: None,
@@ -159,7 +159,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ASSERT_VALID_DIV0,
+                opcode: RV_IM::VIRTUAL_ASSERT_VALID_DIV0,
                 rs1: r_y,
                 rs2: v_q,
                 rd: None,
@@ -181,7 +181,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::ADD,
+                opcode: RV_IM::ADD,
                 rs1: v_qy,
                 rs2: v_r,
                 rd: v_0,
@@ -203,7 +203,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ASSERT_EQ,
+                opcode: RV_IM::VIRTUAL_ASSERT_EQ,
                 rs1: v_0,
                 rs2: r_x,
                 rd: None,
@@ -224,7 +224,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for DIVUInstruction<WORD
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_MOVE,
+                opcode: RV_IM::VIRTUAL_MOVE,
                 rs1: v_q,
                 rs2: None,
                 rd: trace_row.instruction.rd,
@@ -265,6 +265,6 @@ mod test {
 
     #[test]
     fn divu_virtual_sequence_32() {
-        jolt_virtual_sequence_test!(DIVUInstruction::<32>, RV32IM::DIVU);
+        jolt_virtual_sequence_test!(DIVUInstruction::<32>, RV_IM::DIVU);
     }
 }

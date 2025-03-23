@@ -70,8 +70,8 @@ pub trait JoltInstruction: Clone + Debug + Send + Sync + Serialize {
     }
 }
 
-pub trait JoltInstructionSet:
-    JoltInstruction + IntoEnumIterator + EnumCount + for<'a> TryFrom<&'a ELFInstruction> + Send + Sync
+pub trait JoltInstructionSet<const WORD_SIZE: usize>:
+    JoltInstruction + IntoEnumIterator + EnumCount + for<'a> TryFrom<&'a ELFInstruction<{WORD_SIZE}>> + Send + Sync
 {
     fn enum_index(instruction: &Self) -> usize {
         // Discriminant: https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
@@ -125,9 +125,10 @@ impl From<Range<usize>> for SubtableIndices {
     }
 }
 
-pub trait VirtualInstructionSequence {
+pub trait VirtualInstructionSequence<const WORD_SIZE: usize> {
     const SEQUENCE_LENGTH: usize;
-    fn virtual_sequence(instruction: ELFInstruction) -> Vec<ELFInstruction> {
+
+    fn virtual_sequence(instruction: ELFInstruction<WORD_SIZE>) -> Vec<ELFInstruction<WORD_SIZE>> {
         let dummy_trace_row = RVTraceRow {
             instruction,
             register_state: RegisterState {
@@ -145,7 +146,7 @@ pub trait VirtualInstructionSequence {
             .map(|trace_row| trace_row.instruction)
             .collect()
     }
-    fn virtual_trace(trace_row: RVTraceRow) -> Vec<RVTraceRow>;
+    fn virtual_trace(trace_row: RVTraceRow<WORD_SIZE>) -> Vec<RVTraceRow<WORD_SIZE>>;
     fn sequence_output(x: u64, y: u64) -> u64;
 }
 

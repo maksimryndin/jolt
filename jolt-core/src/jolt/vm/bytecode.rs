@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(test)]
 use std::collections::HashSet;
-use tracer::RV32IM;
+use tracer::RV_IM;
 
 use crate::field::JoltField;
 use crate::jolt::instruction::JoltInstructionSet;
@@ -152,9 +152,9 @@ impl BytecodeRow {
     ///     circuit flags || instruction flags
     /// where instruction flags is a one-hot bitvector corresponding to the instruction's
     /// index in the `InstructionSet` enum.
-    pub fn bitflags<InstructionSet>(instruction: &ELFInstruction) -> u64
+    pub fn bitflags<const WORD_SIZE: usize, InstructionSet>(instruction: &ELFInstruction<WORD_SIZE>) -> u64
     where
-        InstructionSet: JoltInstructionSet,
+        InstructionSet: JoltInstructionSet<WORD_SIZE>,
     {
         let mut bitvector = 0;
         for flag in instruction.to_circuit_flags() {
@@ -175,29 +175,31 @@ impl BytecodeRow {
         bitvector
     }
 
-    pub fn from_instruction<InstructionSet>(instruction: &ELFInstruction) -> Self
+    pub fn from_instruction<const WORD_SIZE: usize, InstructionSet>(instruction: &ELFInstruction<WORD_SIZE>) -> Self
     where
-        InstructionSet: JoltInstructionSet,
+        InstructionSet: JoltInstructionSet<WORD_SIZE>,
     {
+        // TODO(Maks) check for rv64
+        use RV_IM::*;
         // The load, store, and branch instructions need to do
         // field arithmetic with `imm` in constraints.rs,
         // whereas all other instructions operate on the raw bits
         // of `imm` (via lookup queries).
         let imm = match instruction.opcode {
-            RV32IM::LW
-            | RV32IM::SW
-            | RV32IM::BEQ
-            | RV32IM::BNE
-            | RV32IM::BLT
-            | RV32IM::BGE
-            | RV32IM::BLTU
-            | RV32IM::BGEU => instruction.imm.unwrap_or(0),
+            LW
+            | SW
+            | BEQ
+            | BNE
+            | BLT
+            | BGE
+            | BLTU
+            | BGEU => instruction.imm.unwrap_or(0),
             _ => instruction.imm.unwrap_or(0) & u32::MAX as i64,
         };
 
         Self {
             address: instruction.address as usize,
-            bitflags: Self::bitflags::<InstructionSet>(instruction),
+            bitflags: Self::bitflags::<WORD_SIZE, InstructionSet>(instruction),
             rd: instruction.rd.unwrap_or(0) as u8,
             rs1: instruction.rs1.unwrap_or(0) as u8,
             rs2: instruction.rs2.unwrap_or(0) as u8,

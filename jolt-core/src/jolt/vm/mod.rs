@@ -283,25 +283,26 @@ impl<F: JoltField> JoltPolynomials<F> {
     }
 }
 
-pub trait Jolt<F, PCS, const C: usize, const M: usize, ProofTranscript>
+pub trait Jolt<F, PCS, const C: usize, const M: usize, const WORD_SIZE: usize, ProofTranscript>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     ProofTranscript: Transcript,
 {
-    type InstructionSet: JoltInstructionSet;
+    type InstructionSet: JoltInstructionSet<WORD_SIZE>;
     type Subtables: JoltSubtableSet<F>;
     type Constraints: R1CSConstraints<C, F>;
 
     #[tracing::instrument(skip_all, name = "Jolt::preprocess")]
     fn preprocess(
-        bytecode: Vec<ELFInstruction>,
+        bytecode: Vec<ELFInstruction<WORD_SIZE>>,
         memory_layout: MemoryLayout,
         memory_init: Vec<(u64, u8)>,
         max_bytecode_size: usize,
         max_memory_address: usize,
         max_trace_length: usize,
     ) -> JoltPreprocessing<C, F, PCS, ProofTranscript> {
+        use tracer::RV_IM::*;
         let small_value_lookup_tables = F::compute_lookup_tables();
         F::initialize_lookup_tables(small_value_lookup_tables.clone());
         icicle::icicle_init();
@@ -314,24 +315,25 @@ where
 
         let read_write_memory_preprocessing = ReadWriteMemoryPreprocessing::preprocess(memory_init);
 
+        // TODO(Maks) check rv64
         let bytecode_rows: Vec<BytecodeRow> = bytecode
             .into_iter()
             .flat_map(|instruction| match instruction.opcode {
-                tracer::RV32IM::MULH => MULHInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::MULHSU => MULHSUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::DIV => DIVInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::DIVU => DIVUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::REM => REMInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::REMU => REMUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::SH => SHInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::SB => SBInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LBU => LBUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LHU => LHUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LB => LBInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LH => LHInstruction::<32>::virtual_sequence(instruction),
+                MULH => MULHInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                MULHSU => MULHSUInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                DIV => DIVInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                DIVU => DIVUInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                REM => REMInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                REMU => REMUInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                SH => SHInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                SB => SBInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                LBU => LBUInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                LHU => LHUInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                LB => LBInstruction::<WORD_SIZE>::virtual_sequence(instruction),
+                LH => LHInstruction::<WORD_SIZE>::virtual_sequence(instruction),
                 _ => vec![instruction],
             })
-            .map(|instruction| BytecodeRow::from_instruction::<Self::InstructionSet>(&instruction))
+            .map(|instruction| BytecodeRow::from_instruction::<WORD_SIZE, Self::InstructionSet>(&instruction))
             .collect();
         let bytecode_preprocessing = BytecodePreprocessing::<F>::preprocess(bytecode_rows);
 
@@ -756,5 +758,5 @@ where
 pub mod bytecode;
 pub mod instruction_lookups;
 pub mod read_write_memory;
-pub mod rv32i_vm;
+pub mod rv_i_vm;
 pub mod timestamp_range_check;

@@ -1,5 +1,5 @@
 use common::constants::virtual_register_index;
-use tracer::{ELFInstruction, MemoryState, RVTraceRow, RegisterState, RV32IM};
+use tracer::{ELFInstruction, MemoryState, RVTraceRow, RegisterState, RV_IM};
 
 use super::VirtualInstructionSequence;
 use crate::jolt::instruction::{
@@ -10,11 +10,11 @@ use crate::jolt::instruction::{
 /// Loads a halfword from memory and sign-extends it
 pub struct LHInstruction<const WORD_SIZE: usize>;
 
-impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_SIZE> {
+impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for LHInstruction<WORD_SIZE> {
     const SEQUENCE_LENGTH: usize = 8;
-
-    fn virtual_trace(trace_row: RVTraceRow) -> Vec<RVTraceRow> {
-        assert_eq!(trace_row.instruction.opcode, RV32IM::LH);
+    
+    fn virtual_trace(trace_row: RVTraceRow<WORD_SIZE>) -> Vec<RVTraceRow<WORD_SIZE>> {
+        assert_eq!(trace_row.instruction.opcode, RV_IM::LH);
         let expected_rd_post_val = trace_row.register_state.rd_post_val.unwrap();
         // LH source registers
         let rs1 = trace_row.instruction.rs1;
@@ -43,7 +43,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
+                opcode: RV_IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
                 rs1,
                 rs2: None,
                 rd: None,
@@ -65,7 +65,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::ADDI,
+                opcode: RV_IM::ADDI,
                 rs1,
                 rs2: None,
                 rd: v_address,
@@ -89,7 +89,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::ANDI,
+                opcode: RV_IM::ANDI,
                 rs1: v_address,
                 rs2: None,
                 rd: v_word_address,
@@ -126,7 +126,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::LW,
+                opcode: RV_IM::LW,
                 rs1: v_word_address,
                 rs2: None,
                 rd: v_word,
@@ -151,7 +151,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::XORI,
+                opcode: RV_IM::XORI,
                 rs1: v_address,
                 rs2: None,
                 rd: v_shift,
@@ -173,7 +173,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::SLLI,
+                opcode: RV_IM::SLLI,
                 rs1: v_shift,
                 rs2: None,
                 rd: v_shift,
@@ -195,7 +195,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::SLL,
+                opcode: RV_IM::SLL,
                 rs1: v_word,
                 rs2: v_shift,
                 rd,
@@ -219,7 +219,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
-                opcode: RV32IM::SRAI,
+                opcode: RV_IM::SRAI,
                 rs1: rd,
                 rs2: None,
                 rd,
@@ -244,7 +244,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence for LHInstruction<WORD_S
         unimplemented!("")
     }
 
-    fn virtual_sequence(instruction: ELFInstruction) -> Vec<ELFInstruction> {
+    fn virtual_sequence(instruction: ELFInstruction<WORD_SIZE>) -> Vec<ELFInstruction<WORD_SIZE>>  {
         let dummy_trace_row = RVTraceRow {
             instruction,
             register_state: RegisterState {
@@ -303,7 +303,7 @@ mod test {
             let lh_trace_row = RVTraceRow {
                 instruction: ELFInstruction {
                     address: rng.next_u64(),
-                    opcode: RV32IM::LH,
+                    opcode: RV_IM::LH,
                     rs1: Some(rs1),
                     rs2: None,
                     rd: Some(rd),

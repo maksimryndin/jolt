@@ -29,7 +29,7 @@ use crate::{
             mulhsu::MULHSUInstruction, rem::REMInstruction, remu::REMUInstruction,
             sb::SBInstruction, sh::SHInstruction, VirtualInstructionSequence,
         },
-        vm::{bytecode::BytecodeRow, rv32i_vm::RV32I, JoltTraceStep},
+        vm::{bytecode::BytecodeRow, rv_i_vm::RV_I, JoltTraceStep},
     },
 };
 
@@ -42,7 +42,7 @@ pub mod analyze;
 pub mod toolchain;
 
 #[derive(Clone)]
-pub struct Program {
+pub struct Program<const WORD_SIZE: usize> {
     guest: String,
     func: Option<String>,
     input: Vec<u8>,
@@ -54,7 +54,7 @@ pub struct Program {
     pub elf: Option<PathBuf>,
 }
 
-impl Program {
+impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
     pub fn new(guest: &str) -> Self {
         Self {
             guest: guest.to_string(),
@@ -126,6 +126,7 @@ impl Program {
 
             // TODO(Maks) add a flag argument to provable macros to discriminate between rv64 and rv32
             // for rv64 we need a custom toolchain anyway
+            // use WORD_SIZE
             self.std = true; // for rv32 and rv64n we need a different discriminator
             let toolchain = if self.std {
                 "riscv64ima-jolt-zkvm-elf"
@@ -176,19 +177,21 @@ impl Program {
         }
     }
 
-    pub fn decode(&mut self) -> (Vec<ELFInstruction>, Vec<(u64, u8)>) {
+    pub fn decode(&mut self) -> (Vec<ELFInstruction<WORD_SIZE>>, Vec<(u64, u8)>) {
         self.build();
         let elf = self.elf.as_ref().unwrap();
         let mut elf_file =
             File::open(elf).unwrap_or_else(|_| panic!("could not open elf file: {:?}", elf));
+        // TODO(Maks) allocate capacity in advance?
         let mut elf_contents = Vec::new();
         elf_file.read_to_end(&mut elf_contents).unwrap();
-        tracer::decode(&elf_contents)
+       tracer::decode(&elf_contents)
     }
 
     // TODO(moodlezoup): Make this generic over InstructionSet
     #[tracing::instrument(skip_all, name = "Program::trace")]
-    pub fn trace(&mut self) -> (JoltDevice, Vec<JoltTraceStep<RV32I>>) {
+    pub fn trace(&mut self) -> (JoltDevice, Vec<JoltTraceStep<RV_I<WORD_SIZE>>>) {
+        use tracer::RV_IM::*;
         self.build();
         let elf = self.elf.clone().unwrap();
         let (raw_trace, io_device) =
@@ -197,22 +200,22 @@ impl Program {
         let trace: Vec<_> = raw_trace
             .into_par_iter()
             .flat_map(|row| match row.instruction.opcode {
-                tracer::RV32IM::MULH => MULHInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::MULHSU => MULHSUInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::DIV => DIVInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::DIVU => DIVUInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::REM => REMInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::REMU => REMUInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::SH => SHInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::SB => SBInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::LBU => LBUInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::LHU => LHUInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::LB => LBInstruction::<32>::virtual_trace(row),
-                tracer::RV32IM::LH => LHInstruction::<32>::virtual_trace(row),
+                MULH => MULHInstruction::<WORD_SIZE>::virtual_trace(row),
+                MULHSU => MULHSUInstruction::<WORD_SIZE>::virtual_trace(row),
+                DIV => DIVInstruction::<WORD_SIZE>::virtual_trace(row),
+                DIVU => DIVUInstruction::<WORD_SIZE>::virtual_trace(row),
+                REM => REMInstruction::<WORD_SIZE>::virtual_trace(row),
+                REMU => REMUInstruction::<WORD_SIZE>::virtual_trace(row),
+                SH => SHInstruction::<WORD_SIZE>::virtual_trace(row),
+                SB => SBInstruction::<WORD_SIZE>::virtual_trace(row),
+                LBU => LBUInstruction::<WORD_SIZE>::virtual_trace(row),
+                LHU => LHUInstruction::<WORD_SIZE>::virtual_trace(row),
+                LB => LBInstruction::<WORD_SIZE>::virtual_trace(row),
+                LH => LHInstruction::<WORD_SIZE>::virtual_trace(row),
                 _ => vec![row],
             })
             .map(|row| {
-                let instruction_lookup = if let Ok(jolt_instruction) = RV32I::try_from(&row) {
+                let instruction_lookup = if let Ok(jolt_instruction) = RV_I::<WORD_SIZE>::try_from(&row) {
                     Some(jolt_instruction)
                 } else {
                     // Instruction does not use lookups
@@ -221,7 +224,7 @@ impl Program {
 
                 JoltTraceStep {
                     instruction_lookup,
-                    bytecode_row: BytecodeRow::from_instruction::<RV32I>(&row.instruction),
+                    bytecode_row: BytecodeRow::from_instruction::<WORD_SIZE, RV_I<WORD_SIZE>>(&row.instruction),
                     memory_ops: (&row).into(),
                     circuit_flags: row.instruction.to_circuit_flags(),
                 }
@@ -231,7 +234,7 @@ impl Program {
         (io_device, trace)
     }
 
-    pub fn trace_analyze<F: JoltField>(mut self) -> ProgramSummary {
+    pub fn trace_analyze<F: JoltField>(mut self) -> ProgramSummary<WORD_SIZE> {
         self.build();
         let elf = self.elf.as_ref().unwrap();
         let (raw_trace, _) =
@@ -269,6 +272,7 @@ impl Program {
     }
 }
 
+// TODO(Maks) for origin use PC_START_ADDRESS const
 const LINKER_SCRIPT_TEMPLATE: &str = r#"
 MEMORY {
   program (rwx) : ORIGIN = 0x80000000, LENGTH = {MEMORY_SIZE}

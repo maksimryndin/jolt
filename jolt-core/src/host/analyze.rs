@@ -1,31 +1,31 @@
 use std::{collections::HashMap, fs::File, io, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tracer::{ELFInstruction, JoltDevice, RVTraceRow, RV32IM};
+use tracer::{ELFInstruction, JoltDevice, RVTraceRow, RV_IM};
 
 use crate::{
     field::JoltField,
-    jolt::vm::{rv32i_vm::RV32I, JoltTraceStep},
+    jolt::vm::{rv_i_vm::RV_I, JoltTraceStep},
 };
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ProgramSummary {
-    pub raw_trace: Vec<RVTraceRow>,
+pub struct ProgramSummary<const WORD_SIZE: usize> {
+    pub raw_trace: Vec<RVTraceRow<WORD_SIZE>>,
 
-    pub bytecode: Vec<ELFInstruction>,
+    pub bytecode: Vec<ELFInstruction<WORD_SIZE>>,
     pub memory_init: Vec<(u64, u8)>,
 
     pub io_device: JoltDevice,
-    pub processed_trace: Vec<JoltTraceStep<RV32I>>,
+    pub processed_trace: Vec<JoltTraceStep<RV_I<WORD_SIZE>>>,
 }
 
-impl ProgramSummary {
+impl<const WORD_SIZE: usize> ProgramSummary<WORD_SIZE> {
     pub fn trace_len(&self) -> usize {
         self.processed_trace.len()
     }
 
-    pub fn analyze<F: JoltField>(&self) -> Vec<(RV32IM, usize)> {
-        let mut counts = HashMap::<RV32IM, usize>::new();
+    pub fn analyze<F: JoltField>(&self) -> Vec<(RV_IM<WORD_SIZE>, usize)> {
+        let mut counts = HashMap::<RV_IM<WORD_SIZE>, usize>::new();
         for row in self.raw_trace.iter() {
             let op = row.instruction.opcode;
             if let Some(count) = counts.get(&op) {
