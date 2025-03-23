@@ -7,8 +7,8 @@ use strum::EnumCount;
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter, FromRepr};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RVTraceRow {
-    pub instruction: ELFInstruction,
+pub struct RVTraceRow<const WORD_SIZE: u8> {
+    pub instruction: ELFInstruction<WORD_SIZE>,
     pub register_state: RegisterState,
     pub memory_state: Option<MemoryState>,
     pub advice_value: Option<u64>,
@@ -45,8 +45,10 @@ fn sum_u64_i32(a: u64, b: i32) -> u64 {
     }
 }
 
-impl From<&RVTraceRow> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
-    fn from(val: &RVTraceRow) -> Self {
+impl<const WORD_SIZE: u8> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
+    fn from(val: &RVTraceRow<WORD_SIZE>) -> Self {
+        use RV_IM::*;
+        // TODO(Maks) add 64 bit instructions
         let rs1_read = || MemoryOp::Read(val.instruction.rs1.unwrap());
         let rs2_read = || MemoryOp::Read(val.instruction.rs2.unwrap());
         let rd_write = || {
@@ -86,104 +88,104 @@ impl From<&RVTraceRow> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
         // If any are empty a no_op is inserted.
 
         match val.instruction.opcode {
-            RV32IM::ADD
-            | RV32IM::SUB
-            | RV32IM::XOR
-            | RV32IM::OR
-            | RV32IM::AND
-            | RV32IM::SLL
-            | RV32IM::SRL
-            | RV32IM::SRA
-            | RV32IM::SLT
-            | RV32IM::SLTU
-            | RV32IM::MUL
-            | RV32IM::MULH
-            | RV32IM::MULHU
-            | RV32IM::MULHSU
-            | RV32IM::MULU
-            | RV32IM::DIV
-            | RV32IM::DIVU
-            | RV32IM::REM
-            | RV32IM::REMU => [rs1_read(), rs2_read(), rd_write(), MemoryOp::noop_read()],
+            ADD
+            | SUB
+            | XOR
+            | OR
+            | AND
+            | SLL
+            | SRL
+            | SRA
+            | SLT
+            | SLTU
+            | MUL
+            | MULH
+            | MULHU
+            | MULHSU
+            | MULU
+            | DIV
+            | DIVU
+            | REM
+            | REMU => [rs1_read(), rs2_read(), rd_write(), MemoryOp::noop_read()],
 
-            RV32IM::LUI | RV32IM::AUIPC | RV32IM::VIRTUAL_ADVICE => [
+            LUI | AUIPC | VIRTUAL_ADVICE => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
                 rd_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT => [
+            VIRTUAL_ASSERT_HALFWORD_ALIGNMENT => [
                 rs1_read(),
                 MemoryOp::noop_read(),
                 MemoryOp::noop_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::ADDI
-            | RV32IM::SLLI
-            | RV32IM::SRLI
-            | RV32IM::SRAI
-            | RV32IM::ANDI
-            | RV32IM::ORI
-            | RV32IM::XORI
-            | RV32IM::SLTI
-            | RV32IM::SLTIU
-            | RV32IM::JALR
-            | RV32IM::VIRTUAL_MOVE
-            | RV32IM::VIRTUAL_MOVSIGN => [
+            ADDI
+            | SLLI
+            | SRLI
+            | SRAI
+            | ANDI
+            | ORI
+            | XORI
+            | SLTI
+            | SLTIU
+            | JALR
+            | VIRTUAL_MOVE
+            | VIRTUAL_MOVSIGN => [
                 rs1_read(),
                 MemoryOp::noop_read(),
                 rd_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::LW => [
+            LW => [
                 rs1_read(),
                 MemoryOp::noop_read(),
                 rd_write(),
                 MemoryOp::Read(rs1_offset()),
             ],
-            RV32IM::FENCE => [
+            FENCE => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
                 MemoryOp::noop_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::SB | RV32IM::SH | RV32IM::SW => [
+            SB | SH | SW => [
                 rs1_read(),
                 rs2_read(),
                 MemoryOp::noop_write(),
                 MemoryOp::Write(rs1_offset(), ram_write_value()),
             ],
 
-            // RV32IM::LB | RV32IM::LH | RV32IM::LBU | RV32IM::LHU => [
-            RV32IM::JAL => [
+            // LB | LH | LBU | LHU => [
+            JAL => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
                 rd_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::BEQ
-            | RV32IM::BNE
-            | RV32IM::BLT
-            | RV32IM::BGE
-            | RV32IM::BLTU
-            | RV32IM::BGEU
-            | RV32IM::VIRTUAL_ASSERT_EQ
-            | RV32IM::VIRTUAL_ASSERT_LTE
-            | RV32IM::VIRTUAL_ASSERT_VALID_DIV0
-            | RV32IM::VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
-            | RV32IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER => [
+            BEQ
+            | BNE
+            | BLT
+            | BGE
+            | BLTU
+            | BGEU
+            | VIRTUAL_ASSERT_EQ
+            | VIRTUAL_ASSERT_LTE
+            | VIRTUAL_ASSERT_VALID_DIV0
+            | VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
+            | VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER => [
                 rs1_read(),
                 rs2_read(),
                 MemoryOp::noop_write(),
                 MemoryOp::noop_read(),
             ],
 
-            RV32IM::ECALL => [
+            ECALL => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
                 MemoryOp::noop_write(),
@@ -196,9 +198,9 @@ impl From<&RVTraceRow> for [MemoryOp; MEMORY_OPS_PER_INSTRUCTION] {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ELFInstruction {
+pub struct ELFInstruction<const WORD_SIZE: u8> {
     pub address: u64,
-    pub opcode: RV32IM,
+    pub opcode: RV_IM<WORD_SIZE>,
     pub rs1: Option<u64>,
     pub rs2: Option<u64>,
     pub rd: Option<u64>,
@@ -244,117 +246,119 @@ pub enum CircuitFlags {
 }
 pub const NUM_CIRCUIT_FLAGS: usize = CircuitFlags::COUNT;
 
-impl ELFInstruction {
+impl<const WORD_SIZE: u8> ELFInstruction<WORD_SIZE> {
     #[rustfmt::skip]
     pub fn to_circuit_flags(&self) -> [bool; NUM_CIRCUIT_FLAGS] {
+        use RV_IM::*;
+        // TODO(Maks) add 64 bit instructions
         let mut flags = [false; NUM_CIRCUIT_FLAGS];
 
         flags[CircuitFlags::LeftOperandIsPC as usize] = matches!(
             self.opcode,
-            RV32IM::JAL | RV32IM::LUI | RV32IM::AUIPC,
+            JAL | LUI | AUIPC,
         );
 
         flags[CircuitFlags::RightOperandIsImm as usize] = matches!(
             self.opcode,
-            RV32IM::ADDI
-            | RV32IM::XORI
-            | RV32IM::ORI
-            | RV32IM::ANDI
-            | RV32IM::SLLI
-            | RV32IM::SRLI
-            | RV32IM::SRAI
-            | RV32IM::SLTI
-            | RV32IM::SLTIU
-            | RV32IM::AUIPC
-            | RV32IM::JAL
-            | RV32IM::JALR
-            | RV32IM::SW
-            | RV32IM::LW
-            | RV32IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
+            ADDI
+            | XORI
+            | ORI
+            | ANDI
+            | SLLI
+            | SRLI
+            | SRAI
+            | SLTI
+            | SLTIU
+            | AUIPC
+            | JAL
+            | JALR
+            | SW
+            | LW
+            | VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
         );
 
         flags[CircuitFlags::Load as usize] = matches!(
             self.opcode,
-            RV32IM::LW,
+            LW,
         );
 
         flags[CircuitFlags::Store as usize] = matches!(
             self.opcode,
-            RV32IM::SW,
+            SW,
         );
 
         flags[CircuitFlags::Jump as usize] = matches!(
             self.opcode,
-            RV32IM::JAL | RV32IM::JALR,
+            JAL | JALR,
         );
 
         flags[CircuitFlags::Branch as usize] = matches!(
             self.opcode,
-            RV32IM::BEQ | RV32IM::BNE | RV32IM::BLT | RV32IM::BGE | RV32IM::BLTU | RV32IM::BGEU,
+            BEQ | BNE | BLT | BGE | BLTU | BGEU,
         );
 
         // Stores, branches, jumps, and asserts do not store the lookup output to rd (they may update rd in other ways)
         flags[CircuitFlags::WriteLookupOutputToRD as usize] = !matches!(
             self.opcode,
-            RV32IM::SW
-            | RV32IM::LW
-            | RV32IM::BEQ
-            | RV32IM::BNE
-            | RV32IM::BLT
-            | RV32IM::BGE
-            | RV32IM::BLTU
-            | RV32IM::BGEU
-            | RV32IM::JAL
-            | RV32IM::JALR
-            | RV32IM::LUI
-            | RV32IM::VIRTUAL_ASSERT_EQ
-            | RV32IM::VIRTUAL_ASSERT_LTE
-            | RV32IM::VIRTUAL_ASSERT_VALID_DIV0
-            | RV32IM::VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
-            | RV32IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER
-            | RV32IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT
+            SW
+            | LW
+            | BEQ
+            | BNE
+            | BLT
+            | BGE
+            | BLTU
+            | BGEU
+            | JAL
+            | JALR
+            | LUI
+            | VIRTUAL_ASSERT_EQ
+            | VIRTUAL_ASSERT_LTE
+            | VIRTUAL_ASSERT_VALID_DIV0
+            | VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
+            | VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER
+            | VIRTUAL_ASSERT_HALFWORD_ALIGNMENT
         );
 
         flags[CircuitFlags::ConcatLookupQueryChunks as usize] = matches!(
             self.opcode,
-            RV32IM::XOR
-            | RV32IM::XORI
-            | RV32IM::OR
-            | RV32IM::ORI
-            | RV32IM::AND
-            | RV32IM::ANDI
-            | RV32IM::SLL
-            | RV32IM::SRL
-            | RV32IM::SRA
-            | RV32IM::SLLI
-            | RV32IM::SRLI
-            | RV32IM::SRAI
-            | RV32IM::SLT
-            | RV32IM::SLTU
-            | RV32IM::SLTI
-            | RV32IM::SLTIU
-            | RV32IM::BEQ
-            | RV32IM::BNE
-            | RV32IM::BLT
-            | RV32IM::BGE
-            | RV32IM::BLTU
-            | RV32IM::BGEU
-            | RV32IM::VIRTUAL_ASSERT_EQ
-            | RV32IM::VIRTUAL_ASSERT_LTE
-            | RV32IM::VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
-            | RV32IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER
-            | RV32IM::VIRTUAL_ASSERT_VALID_DIV0,
+            XOR
+            | XORI
+            | OR
+            | ORI
+            | AND
+            | ANDI
+            | SLL
+            | SRL
+            | SRA
+            | SLLI
+            | SRLI
+            | SRAI
+            | SLT
+            | SLTU
+            | SLTI
+            | SLTIU
+            | BEQ
+            | BNE
+            | BLT
+            | BGE
+            | BLTU
+            | BGEU
+            | VIRTUAL_ASSERT_EQ
+            | VIRTUAL_ASSERT_LTE
+            | VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER
+            | VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER
+            | VIRTUAL_ASSERT_VALID_DIV0,
         );
 
         flags[CircuitFlags::Virtual as usize] = self.virtual_sequence_remaining.is_some();
 
         flags[CircuitFlags::Assert as usize] = matches!(self.opcode,
-            RV32IM::VIRTUAL_ASSERT_EQ                        |
-            RV32IM::VIRTUAL_ASSERT_LTE                       |
-            RV32IM::VIRTUAL_ASSERT_HALFWORD_ALIGNMENT        |
-            RV32IM::VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER    |
-            RV32IM::VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER  |
-            RV32IM::VIRTUAL_ASSERT_VALID_DIV0
+            VIRTUAL_ASSERT_EQ                        |
+            VIRTUAL_ASSERT_LTE                       |
+            VIRTUAL_ASSERT_HALFWORD_ALIGNMENT        |
+            VIRTUAL_ASSERT_VALID_SIGNED_REMAINDER    |
+            VIRTUAL_ASSERT_VALID_UNSIGNED_REMAINDER  |
+            VIRTUAL_ASSERT_VALID_DIV0
         );
 
         // All instructions in virtual sequence are mapped from the same
@@ -389,7 +393,7 @@ pub enum MemoryState {
     },
 }
 
-impl RVTraceRow {
+impl<const WORD_SIZE: u8> RVTraceRow<WORD_SIZE> {
     pub fn imm_u64(&self) -> u64 {
         self.instruction.imm.unwrap() as u64
     }
@@ -403,7 +407,7 @@ impl RVTraceRow {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromRepr, Serialize, Deserialize, Hash)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
-pub enum RV32IM {
+pub enum RV_IM<const WORD_SIZE: u8> {
     ADD,
     SUB,
     XOR,
@@ -454,6 +458,8 @@ pub enum RV32IM {
     REMU,
     FENCE,
     UNIMPL,
+    // 64 bit instructions
+    ADDW,
     // Virtual instructions
     VIRTUAL_MOVSIGN,
     VIRTUAL_MOVE,
@@ -466,10 +472,10 @@ pub enum RV32IM {
     VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
 }
 
-impl FromStr for RV32IM {
+impl<const WORD_SIZE: u8> FromStr for RV_IM<WORD_SIZE> {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<RV32IM, String> {
+    fn from_str(s: &str) -> Result<RV_IM<WORD_SIZE>, String> {
         match s {
             "ADD" => Ok(Self::ADD),
             "SUB" => Ok(Self::SUB),
@@ -521,7 +527,9 @@ impl FromStr for RV32IM {
             "REMU" => Ok(Self::REMU),
             "FENCE" => Ok(Self::FENCE),
             "UNIMPL" => Ok(Self::UNIMPL),
-            _ => Err("Could not match instruction to RV32IM set.".to_string()),
+            // TODO(Maks) => add 64 bit instructions with the check of WORD_SIZE
+            "ADDW" if WORD_SIZE == 64 => Ok(Self::ADDW),
+            _ => Err(format!("Could not match instruction to RV{WORD_SIZE}IM set.")),
         }
     }
 }
