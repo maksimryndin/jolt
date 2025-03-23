@@ -26,7 +26,7 @@ use super::terminal::Terminal;
 /// It also manages virtual-physical address translation and memory protection.
 /// It may also be said Bus.
 /// @TODO: Memory protection is not implemented yet. We should support.
-pub struct Mmu<const XLEN: u8> {
+pub struct Mmu<const XLEN: usize> {
     clock: u64,
     ppn: u64,
     addressing_mode: AddressingMode,
@@ -85,7 +85,7 @@ fn _get_addressing_mode_name(mode: &AddressingMode) -> &'static str {
     }
 }
 
-impl<const XLEN: u8> Mmu<XLEN> {
+impl<const XLEN: usize> Mmu<XLEN> {
     /// Creates a new `Mmu`.
     ///
     /// # Arguments
@@ -1153,12 +1153,12 @@ impl<const XLEN: u8> Mmu<XLEN> {
 
 /// [`Memory`](../memory/struct.Memory.html) wrapper. Converts physical address to the one in memory
 /// using [`DRAM_BASE`](constant.DRAM_BASE.html) and accesses [`Memory`](../memory/struct.Memory.html).
-pub struct MemoryWrapper<const XLEN: u8> {
+pub struct MemoryWrapper<const XLEN: usize> {
     memory: Memory,
     tracer: Rc<Tracer<XLEN>>,
 }
 
-impl<const XLEN: u8> MemoryWrapper<XLEN> {
+impl<const XLEN: usize> MemoryWrapper<XLEN> {
     fn new(tracer: Rc<Tracer<XLEN>>) -> Self {
         MemoryWrapper {
             memory: Memory::new(),

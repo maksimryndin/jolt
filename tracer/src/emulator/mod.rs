@@ -29,7 +29,7 @@ use self::terminal::Terminal;
 /// // Go!
 /// emulator.run();
 /// ```
-pub struct Emulator<const XLEN: u8> {
+pub struct Emulator<const XLEN: usize> {
     cpu: Cpu<XLEN>,
 
     /// Stores mapping from symbol to virtual address
@@ -45,7 +45,7 @@ pub struct Emulator<const XLEN: u8> {
     tohost_addr: u64,
 }
 
-impl<const XLEN: u8> Emulator<XLEN> {
+impl<const XLEN: usize> Emulator<XLEN> {
     /// Creates a new `Emulator`. [`Terminal`](terminal/trait.Terminal.html)
     /// is internally used for transferring input/output data to/from `Emulator`.
     ///
@@ -182,7 +182,7 @@ impl<const XLEN: u8> Emulator<XLEN> {
 
         // Detected whether the elf file is riscv-tests.
         // Setting up CPU and Memory depending on it.
-        debug_assert_eq!(header.e_width, XLEN, "object header bit width should be equal to register width {}", XLEN);
+        debug_assert_eq!(header.e_width, XLEN as u8, "object header bit width should be equal to register width {}", XLEN);
 
         if self.tohost_addr != 0 {
             self.is_test = true;

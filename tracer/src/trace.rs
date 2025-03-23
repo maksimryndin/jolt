@@ -4,12 +4,12 @@ use common::rv_trace::{ELFInstruction, MemoryState, RVTraceRow, RegisterState};
 
 
 // TODO(Maks) try remove RefCell
-pub struct Tracer<const XLEN: u8> {
+pub struct Tracer<const XLEN: usize> {
     pub rows: RefCell<Vec<RVTraceRow<XLEN>>>,
     open: RefCell<bool>,
 }
 
-impl<const XLEN: u8> Tracer<XLEN> {
+impl<const XLEN: usize> Tracer<XLEN> {
     pub fn new() -> Self {
         Self {
             rows: RefCell::new(Vec::new()),
@@ -81,7 +81,7 @@ impl<const XLEN: u8> Tracer<XLEN> {
 }
 
 // TODO(Maks) make const
-fn normalize_register_value<const XLEN: u8>(value: i64) -> u64 {
+fn normalize_register_value<const XLEN: usize>(value: i64) -> u64 {
     match XLEN {
         32 => value as u32 as u64,
         64 => value as u64,

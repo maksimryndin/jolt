@@ -66,7 +66,7 @@ const MIP_STIP: u64 = 0x020;
 const MIP_SSIP: u64 = 0x002;
 
 /// Emulates a RISC-V CPU core
-pub struct Cpu<const XLEN: u8> {
+pub struct Cpu<const XLEN: usize> {
     clock: u64,
     privilege_mode: PrivilegeMode,
     wfi: bool,
@@ -183,7 +183,7 @@ fn _get_trap_type_name(trap_type: &TrapType) -> &'static str {
     }
 }
 
-fn get_trap_cause<const XLEN: u8>(trap: &Trap) -> u64 {
+fn get_trap_cause<const XLEN: usize>(trap: &Trap) -> u64 {
     // TODO(Maks) make const
     let interrupt_bit = match XLEN {
         32 => 0x80000000_u64,
@@ -217,7 +217,7 @@ fn get_trap_cause<const XLEN: u8>(trap: &Trap) -> u64 {
     }
 }
 
-impl<const XLEN: u8> Cpu<XLEN> {
+impl<const XLEN: usize> Cpu<XLEN> {
     /// Creates a new `Cpu`.
     ///
     /// # Arguments
@@ -253,8 +253,8 @@ impl<const XLEN: u8> Cpu<XLEN> {
         cpu
     }
 
-    // TODO(Maks) make const
-    pub fn xlen(&self) -> u8 {
+    // TODO(Maks) make const, XLEN should u8
+    pub fn xlen(&self) -> usize {
         XLEN
     }
 
@@ -1462,7 +1462,7 @@ impl<const XLEN: u8> Cpu<XLEN> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Instruction<const XLEN: u8> {
+pub struct Instruction<const XLEN: usize> {
     pub mask: u32,
     pub data: u32, // @TODO: rename
     pub name: &'static str,
@@ -1495,7 +1495,7 @@ fn parse_format_b(word: u32) -> FormatB {
     }
 }
 
-fn dump_format_b<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
+fn dump_format_b<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
     let f = parse_format_b(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rs1));
@@ -1524,7 +1524,7 @@ fn parse_format_csr(word: u32) -> FormatCSR {
     }
 }
 
-fn dump_format_csr<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_csr<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_csr(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1564,7 +1564,7 @@ fn parse_format_i(word: u32) -> FormatI {
     }
 }
 
-fn dump_format_i<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_i<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_i(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1579,7 +1579,7 @@ fn dump_format_i<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, 
     s
 }
 
-fn dump_format_i_mem<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_i_mem<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_i(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1615,7 +1615,7 @@ fn parse_format_j(word: u32) -> FormatJ {
     }
 }
 
-fn dump_format_j<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
+fn dump_format_j<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, address: u64, evaluate: bool) -> String {
     let f = parse_format_j(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1640,7 +1640,7 @@ fn parse_format_r(word: u32) -> FormatR {
     }
 }
 
-fn dump_format_r<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_r<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_r(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1675,7 +1675,7 @@ fn parse_format_r2(word: u32) -> FormatR2 {
     }
 }
 
-fn dump_format_r2<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_r2<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_r2(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rd));
@@ -1719,7 +1719,7 @@ fn parse_format_s(word: u32) -> FormatS {
     }
 }
 
-fn dump_format_s<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_s<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     let f = parse_format_s(word);
     let mut s = String::new();
     s += &format!("{}", get_register_name(f.rs2));
@@ -1753,7 +1753,7 @@ fn parse_format_u(word: u32) -> FormatU {
     }
 }
 
-fn dump_format_u<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
+fn dump_format_u<const XLEN: usize>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, evaluate: bool) -> String {
     println!("f format: {:x}", word);
     let f = parse_format_u(word);
     let mut s = String::new();
@@ -1765,7 +1765,7 @@ fn dump_format_u<const XLEN: u8>(cpu: &mut Cpu<XLEN>, word: u32, _address: u64, 
     s
 }
 
-fn dump_empty<const XLEN: u8>(_cpu: &mut Cpu<XLEN>, _word: u32, _address: u64, _evaluate: bool) -> String {
+fn dump_empty<const XLEN: usize>(_cpu: &mut Cpu<XLEN>, _word: u32, _address: u64, _evaluate: bool) -> String {
     String::new()
 }
 
@@ -1807,7 +1807,7 @@ fn get_register_name(num: usize) -> &'static str {
     }
 }
 
-fn normalize_u64<const XLEN: u8>(value: u64) -> u64 {
+fn normalize_u64<const XLEN: usize>(value: u64) -> u64 {
     // TODO(Maks) make const
     match XLEN {
         32 => value as u32 as u64,
@@ -1820,7 +1820,7 @@ fn normalize_register(value: usize) -> u64 {
     value.try_into().unwrap()
 }
 
-fn trace_r<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_r<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_r(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1833,7 +1833,7 @@ fn trace_r<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
     }
 }
 
-fn trace_i<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_i<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_i(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1846,7 +1846,7 @@ fn trace_i<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
     }
 }
 
-fn trace_s<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_s<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_s(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1859,7 +1859,7 @@ fn trace_s<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
     }
 }
 
-fn trace_b<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_b<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_b(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1872,7 +1872,7 @@ fn trace_b<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
     }
 }
 
-fn trace_u<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_u<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_u(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1886,7 +1886,7 @@ fn trace_u<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
 }
 
 // (UJ)
-fn trace_j<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
+fn trace_j<const XLEN: usize>(inst: &Instruction<XLEN>, word: u32, address: u64) -> ELFInstruction<XLEN> {
     let f = parse_format_j(word);
     ELFInstruction {
         opcode: RV_IM::from_str(inst.name).unwrap(),
@@ -1902,7 +1902,7 @@ fn trace_j<const XLEN: u8>(inst: &Instruction<XLEN>, word: u32, address: u64) ->
 const INSTRUCTION_NUM: usize = 116;
 
 // @TODO: Reorder in often used order as
-pub const INSTRUCTIONS<const XLEN: u8>: [Instruction<{XLEN}>; INSTRUCTION_NUM] = [
+pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM] = [
     Instruction {
         mask: 0xfe00707f,
         data: 0x00000033,

@@ -23,7 +23,7 @@ pub use common::rv_trace::{
 use crate::decode::decode_raw;
 
 #[tracing::instrument(skip_all)]
-pub fn trace<const XLEN: u8>(
+pub fn trace<const XLEN: usize>(
     elf: &PathBuf,
     inputs: &[u8],
     input_size: u64,
@@ -69,7 +69,7 @@ pub fn trace<const XLEN: u8>(
 }
 
 #[tracing::instrument(skip_all)]
-pub fn decode<const XLEN: u8>(elf: &[u8]) -> (Vec<ELFInstruction<XLEN>>, Vec<(u64, u8)>) {
+pub fn decode<const XLEN: usize>(elf: &[u8]) -> (Vec<ELFInstruction<XLEN>>, Vec<(u64, u8)>) {
     let obj = object::File::parse(elf).unwrap();
     // TODO(Maks) check that word_size is correct for the parsed object file
     let sections = obj
