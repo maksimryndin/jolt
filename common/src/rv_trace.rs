@@ -459,7 +459,7 @@ pub enum RV_IM<const WORD_SIZE: usize> {
     FENCE,
     UNIMPL,
     // 64 bit instructions
-    ADDW,
+    //ADDW,
     // Virtual instructions
     VIRTUAL_MOVSIGN,
     VIRTUAL_MOVE,
@@ -528,7 +528,7 @@ impl<const WORD_SIZE: usize> FromStr for RV_IM<WORD_SIZE> {
             "FENCE" => Ok(Self::FENCE),
             "UNIMPL" => Ok(Self::UNIMPL),
             // TODO(Maks) => add 64 bit instructions with the check of WORD_SIZE
-            "ADDW" if WORD_SIZE == 64 => Ok(Self::ADDW),
+            //"ADDW" if WORD_SIZE == 64 => Ok(Self::ADDW),
             _ => Err(format!("Could not match instruction to RV{WORD_SIZE}IM set.")),
         }
     }

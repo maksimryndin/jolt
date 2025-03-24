@@ -1,4 +1,4 @@
-mod build_wasm;
+//mod build_wasm;
 
 use std::{
     fs::{self, File},
@@ -10,7 +10,8 @@ use eyre::Result;
 use rand::prelude::SliceRandom;
 use sysinfo::System;
 
-use build_wasm::{build_wasm, modify_cargo_toml};
+// TODO(Maks) make generic
+//use build_wasm::{build_wasm, modify_cargo_toml};
 use jolt_core::host::toolchain;
 
 #[derive(Parser)]
@@ -44,7 +45,7 @@ fn main() {
         Command::New { name, wasm } => create_project(name, wasm),
         Command::InstallToolchain => install_toolchain(),
         Command::UninstallToolchain => uninstall_toolchain(),
-        Command::BuildWasm => build_wasm(),
+        Command::BuildWasm => {} //build_wasm(),
     }
 }
 
@@ -52,9 +53,9 @@ fn create_project(name: String, wasm: bool) {
     create_folder_structure(&name).expect("could not create directory");
     create_host_files(&name).expect("file creation failed");
     create_guest_files(&name).expect("file creation failed");
-    if wasm {
-        modify_cargo_toml(&name).expect("Failed to update Cargo.toml");
-    }
+    // if wasm {
+    //     modify_cargo_toml(&name).expect("Failed to update Cargo.toml");
+    // }
 }
 
 fn install_toolchain() {

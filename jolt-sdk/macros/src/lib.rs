@@ -102,7 +102,7 @@ impl MacroBuilder {
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "guest")))]
             pub fn #build_fn_name() -> (
                 impl Fn(#(#input_types),*) -> #prove_output_ty + Sync + Send,
-                impl Fn(jolt::JoltHyperKZGProof) -> bool + Sync + Send
+                impl Fn(jolt::JoltHyperKZGProof<WORD_SIZE>) -> bool + Sync + Send
             ) {
                 #imports
                 let (program, preprocessing) = #preprocess_fn_name();
@@ -119,10 +119,10 @@ impl MacroBuilder {
                 };
 
 
-                let verify_closure = move |proof: jolt::JoltHyperKZGProof| {
+                let verify_closure = move |proof: jolt::JoltHyperKZGProof<WORD_SIZE>| {
                     let program = (*program_cp).clone();
                     let preprocessing = (*preprocessing_cp).clone();
-                    RV32IJoltVM::verify(preprocessing, proof.proof, proof.commitments, None).is_ok()
+                    RV_IJoltVM::<WORD_SIZE>::verify(preprocessing, proof.proof, proof.commitments, None).is_ok()
                 };
 
                 (prove_closure, verify_closure)
@@ -163,10 +163,10 @@ impl MacroBuilder {
         quote! {
              #[cfg(not(target_arch = "wasm32"))]
              #[cfg(not(feature = "guest"))]
-             pub fn #analyze_fn_name(#inputs) -> jolt::host::analyze::ProgramSummary {
+             pub fn #analyze_fn_name(#inputs) -> jolt::host::analyze::ProgramSummary<WORD_SIZE> {
                 #imports
 
-                let mut program = Program::new(#guest_name);
+                let mut program = Program::<WORD_SIZE>::new(#guest_name);
                 program.set_func(#fn_name_str);
                 #set_std
                 #set_mem_size
@@ -192,12 +192,12 @@ impl MacroBuilder {
         quote! {
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "guest")))]
             pub fn #preprocess_fn_name() -> (
-                jolt::host::Program,
+                jolt::host::Program<WORD_SIZE>,
                 jolt::JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript>
             ) {
                 #imports
 
-                let mut program = Program::new(#guest_name);
+                let mut program = Program::<WORD_SIZE>::new(#guest_name);
                 program.set_func(#fn_name_str);
                 #set_std
                 #set_mem_size
@@ -206,7 +206,7 @@ impl MacroBuilder {
 
                 // TODO(moodlezoup): Feed in size parameters via macro
                 let preprocessing: JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript> =
-                    RV32IJoltVM::preprocess(
+                    RV_IJoltVM::preprocess(
                         bytecode,
                         memory_layout,
                         memory_init,
@@ -246,7 +246,7 @@ impl MacroBuilder {
         quote! {
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "guest")))]
             pub fn #prove_fn_name(
-                mut program: jolt::host::Program,
+                mut program: jolt::host::Program<WORD_SIZE>,
                 preprocessing: jolt::JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript>,
                 #inputs
             ) -> #prove_output_ty {
@@ -258,7 +258,7 @@ impl MacroBuilder {
 
                 let output_bytes = io_device.outputs.clone();
 
-                let (jolt_proof, jolt_commitments, _) = RV32IJoltVM::prove(
+                let (jolt_proof, jolt_commitments, _) = RV_IJoltVM::<WORD_SIZE>::prove(
                     io_device,
                     trace,
                     preprocessing,
@@ -266,7 +266,7 @@ impl MacroBuilder {
 
                 #handle_return
 
-                let proof = jolt::JoltHyperKZGProof {
+                let proof = jolt::JoltHyperKZGProof::<WORD_SIZE> {
                     proof: jolt_proof,
                     commitments: jolt_commitments,
                 };
@@ -335,6 +335,8 @@ impl MacroBuilder {
                     jal main\n\
                     j .\n\
             ");
+
+            const WORD_SIZE: usize = 32;
 
             #declare_alloc
 
@@ -409,9 +411,9 @@ impl MacroBuilder {
                 Jolt,
                 JoltCommitments,
                 ProofTranscript,
-                RV32IJoltVM,
-                RV32I,
-                RV32IJoltProof,
+                RV_IJoltVM,
+                RV_I,
+                RV_IJoltProof,
                 BytecodeRow,
                 MemoryOp,
                 MemoryLayout,
@@ -497,10 +499,10 @@ impl MacroBuilder {
     fn get_prove_output_type(&self) -> TokenStream2 {
         match &self.func.sig.output {
             ReturnType::Default => quote! {
-                ((), jolt::JoltHyperKZGProof)
+                ((), jolt::JoltHyperKZGProof<WORD_SIZE>)
             },
             ReturnType::Type(_, ty) => quote! {
-                (#ty, jolt::JoltHyperKZGProof)
+                (#ty, jolt::JoltHyperKZGProof<WORD_SIZE>)
             },
         }
     }
@@ -546,12 +548,12 @@ impl MacroBuilder {
             #[wasm_bindgen]
             #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
             pub fn #verify_wasm_fn_name(preprocessing_data: &[u8], proof_bytes: &[u8]) -> bool {
-                use jolt::{Jolt, JoltHyperKZGProof, RV32IJoltVM, ProofTranscript};
+                use jolt::{Jolt, JoltHyperKZGProof, RV_IJoltVM, ProofTranscript};
 
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
-                let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
-
-                let preprocessing = RV32IJoltVM::preprocess(
+                let proof = JoltHyperKZGProof::<WORD_SIZE>::deserialize_from_bytes(proof_bytes).unwrap();
+                
+                let preprocessing = RV_IJoltVM::<WORD_SIZE>::preprocess(
                     decoded_preprocessing_data.bytecode,
                     decoded_preprocessing_data.memory_init,
                     1 << 20,
@@ -559,7 +561,7 @@ impl MacroBuilder {
                     1 << 24,
                 );
 
-                let result = RV32IJoltVM::verify(preprocessing, proof.proof, proof.commitments);
+                let result = RV_IJoltVM::<WORD_SIZE>::verify(preprocessing, proof.proof, proof.commitments);
                 result.is_ok()
             }
         }
