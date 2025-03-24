@@ -6,7 +6,7 @@
 
 use crate::impl_r1cs_input_lc_conversions;
 use crate::jolt::instruction::JoltInstructionSet;
-use crate::jolt::vm::rv32i_vm::RV32I;
+use crate::jolt::vm::rv_i_vm::RV_I;
 use crate::jolt::vm::{JoltCommitments, JoltStuff, JoltTraceStep};
 use crate::lasso::memory_checking::{Initializable, StructuredPolynomialData};
 use crate::poly::commitment::commitment_scheme::CommitmentScheme;
@@ -159,12 +159,13 @@ pub type R1CSCommitments<PCS: CommitmentScheme<ProofTranscript>, ProofTranscript
 impl<F: JoltField> R1CSPolynomials<F> {
     #[tracing::instrument(skip_all, name = "R1CSPolynomials::new")]
     pub fn new<
+        const WORD_SIZE: usize,
         const C: usize,
         const M: usize,
-        InstructionSet: JoltInstructionSet,
+        InstructionSet: JoltInstructionSet<WORD_SIZE>,
         I: ConstraintInput,
     >(
-        trace: &[JoltTraceStep<InstructionSet>],
+        trace: &[JoltTraceStep<WORD_SIZE, InstructionSet>],
     ) -> Self {
         let log_M = log2(M) as usize;
 
@@ -284,7 +285,7 @@ pub trait ConstraintInput: Clone + Copy + Debug + PartialEq + Sync + Send + 'sta
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, EnumIter)]
-pub enum JoltR1CSInputs {
+pub enum JoltR1CSInputs<const WORD_SIZE: usize> {
     Bytecode_A, // Virtual address
     // Bytecode_V
     Bytecode_ELFAddress,
@@ -308,7 +309,7 @@ pub enum JoltR1CSInputs {
     ChunksY(usize),
 
     OpFlags(CircuitFlags),
-    InstructionFlags(RV32I),
+    InstructionFlags(RV_I<WORD_SIZE>),
     Aux(AuxVariable),
 }
 
@@ -326,8 +327,8 @@ pub enum AuxVariable {
     NextPC,
 }
 
-impl_r1cs_input_lc_conversions!(JoltR1CSInputs, 4);
-impl ConstraintInput for JoltR1CSInputs {
+impl_r1cs_input_lc_conversions!(JoltR1CSInputs<WORD_SIZE>, 4);
+impl<const WORD_SIZE: usize> ConstraintInput for JoltR1CSInputs<WORD_SIZE> {
     fn flatten<const C: usize>() -> Vec<Self> {
         JoltR1CSInputs::iter()
             .flat_map(|variant| match variant {
@@ -335,7 +336,7 @@ impl ConstraintInput for JoltR1CSInputs {
                 Self::ChunksX(_) => (0..C).map(Self::ChunksX).collect(),
                 Self::ChunksY(_) => (0..C).map(Self::ChunksY).collect(),
                 Self::OpFlags(_) => CircuitFlags::iter().map(Self::OpFlags).collect(),
-                Self::InstructionFlags(_) => RV32I::iter().map(Self::InstructionFlags).collect(),
+                Self::InstructionFlags(_) => RV_I::<WORD_SIZE>::iter().map(Self::InstructionFlags).collect(),
                 Self::Aux(_) => AuxVariable::iter()
                     .flat_map(|aux| match aux {
                         AuxVariable::RelevantYChunk(_) => (0..C)
@@ -355,27 +356,27 @@ impl ConstraintInput for JoltR1CSInputs {
     ) -> &'a T {
         let aux_polynomials = &jolt.r1cs.aux;
         match self {
-            JoltR1CSInputs::Bytecode_A => &jolt.bytecode.a_read_write,
-            JoltR1CSInputs::Bytecode_ELFAddress => &jolt.bytecode.v_read_write[0],
-            JoltR1CSInputs::Bytecode_Bitflags => &jolt.bytecode.v_read_write[1],
-            JoltR1CSInputs::Bytecode_RD => &jolt.bytecode.v_read_write[2],
-            JoltR1CSInputs::Bytecode_RS1 => &jolt.bytecode.v_read_write[3],
-            JoltR1CSInputs::Bytecode_RS2 => &jolt.bytecode.v_read_write[4],
-            JoltR1CSInputs::Bytecode_Imm => &jolt.bytecode.v_read_write[5],
-            JoltR1CSInputs::RAM_Address => &jolt.read_write_memory.a_ram,
-            JoltR1CSInputs::RS1_Read => &jolt.read_write_memory.v_read_rs1,
-            JoltR1CSInputs::RS2_Read => &jolt.read_write_memory.v_read_rs2,
-            JoltR1CSInputs::RD_Read => &jolt.read_write_memory.v_read_rd,
-            JoltR1CSInputs::RAM_Read => &jolt.read_write_memory.v_read_ram,
-            JoltR1CSInputs::RD_Write => &jolt.read_write_memory.v_write_rd,
-            JoltR1CSInputs::RAM_Write => &jolt.read_write_memory.v_write_ram,
-            JoltR1CSInputs::ChunksQuery(i) => &jolt.instruction_lookups.dim[*i],
-            JoltR1CSInputs::LookupOutput => &jolt.instruction_lookups.lookup_outputs,
-            JoltR1CSInputs::ChunksX(i) => &jolt.r1cs.chunks_x[*i],
-            JoltR1CSInputs::ChunksY(i) => &jolt.r1cs.chunks_y[*i],
-            JoltR1CSInputs::OpFlags(i) => &jolt.r1cs.circuit_flags[*i as usize],
-            JoltR1CSInputs::InstructionFlags(i) => {
-                &jolt.instruction_lookups.instruction_flags[RV32I::enum_index(i)]
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_A => &jolt.bytecode.a_read_write,
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress => &jolt.bytecode.v_read_write[0],
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_Bitflags => &jolt.bytecode.v_read_write[1],
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_RD => &jolt.bytecode.v_read_write[2],
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_RS1 => &jolt.bytecode.v_read_write[3],
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_RS2 => &jolt.bytecode.v_read_write[4],
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_Imm => &jolt.bytecode.v_read_write[5],
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Address => &jolt.read_write_memory.a_ram,
+            JoltR1CSInputs::<WORD_SIZE>::RS1_Read => &jolt.read_write_memory.v_read_rs1,
+            JoltR1CSInputs::<WORD_SIZE>::RS2_Read => &jolt.read_write_memory.v_read_rs2,
+            JoltR1CSInputs::<WORD_SIZE>::RD_Read => &jolt.read_write_memory.v_read_rd,
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Read => &jolt.read_write_memory.v_read_ram,
+            JoltR1CSInputs::<WORD_SIZE>::RD_Write => &jolt.read_write_memory.v_write_rd,
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Write => &jolt.read_write_memory.v_write_ram,
+            JoltR1CSInputs::<WORD_SIZE>::ChunksQuery(i) => &jolt.instruction_lookups.dim[*i],
+            JoltR1CSInputs::<WORD_SIZE>::LookupOutput => &jolt.instruction_lookups.lookup_outputs,
+            JoltR1CSInputs::<WORD_SIZE>::ChunksX(i) => &jolt.r1cs.chunks_x[*i],
+            JoltR1CSInputs::<WORD_SIZE>::ChunksY(i) => &jolt.r1cs.chunks_y[*i],
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(i) => &jolt.r1cs.circuit_flags[*i as usize],
+            JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(i) => {
+                &jolt.instruction_lookups.instruction_flags[RV_I::<WORD_SIZE>::enum_index(i)]
             }
             Self::Aux(aux) => match aux {
                 AuxVariable::LeftLookupOperand => &aux_polynomials.left_lookup_operand,

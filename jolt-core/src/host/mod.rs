@@ -190,7 +190,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
 
     // TODO(moodlezoup): Make this generic over InstructionSet
     #[tracing::instrument(skip_all, name = "Program::trace")]
-    pub fn trace(&mut self) -> (JoltDevice, Vec<JoltTraceStep<RV_I<WORD_SIZE>>>) {
+    pub fn trace(&mut self) -> (JoltDevice, Vec<JoltTraceStep<WORD_SIZE, RV_I<WORD_SIZE>>>) {
         use tracer::RV_IM::*;
         self.build();
         let elf = self.elf.clone().unwrap();

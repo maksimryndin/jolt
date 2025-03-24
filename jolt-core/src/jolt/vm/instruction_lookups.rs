@@ -156,13 +156,13 @@ where
     lookup_outputs_opening: F,
 }
 
-impl<const C: usize, const M: usize, F, PCS, InstructionSet, Subtables, ProofTranscript>
+impl<const WORD_SIZE: usize, const C: usize, const M: usize, F, PCS, InstructionSet, Subtables, ProofTranscript>
     MemoryCheckingProver<F, PCS, ProofTranscript>
-    for InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
+    for InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
-    InstructionSet: JoltInstructionSet,
+    InstructionSet: JoltInstructionSet<WORD_SIZE>,
     Subtables: JoltSubtableSet<F>,
     ProofTranscript: Transcript,
 {
@@ -172,7 +172,7 @@ where
     type Openings = InstructionLookupOpenings<F>;
     type Commitments = InstructionLookupCommitments<PCS, ProofTranscript>;
 
-    type Preprocessing = InstructionLookupsPreprocessing<C, F>;
+    type Preprocessing = InstructionLookupsPreprocessing<C, F>; 
 
     type MemoryTuple = (F, F, F, Option<F>); // (a, v, t, flag)
 
@@ -382,13 +382,13 @@ where
     }
 }
 
-impl<F, PCS, InstructionSet, Subtables, const C: usize, const M: usize, ProofTranscript>
+impl<const WORD_SIZE: usize, F, PCS, InstructionSet, Subtables, const C: usize, const M: usize, ProofTranscript>
     MemoryCheckingVerifier<F, PCS, ProofTranscript>
-    for InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
+    for InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
-    InstructionSet: JoltInstructionSet,
+    InstructionSet: JoltInstructionSet<WORD_SIZE>,
     Subtables: JoltSubtableSet<F>,
     ProofTranscript: Transcript,
 {
@@ -572,6 +572,7 @@ where
 /// Proof of instruction lookups for a single Jolt program execution.
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct InstructionLookupsProof<
+    const WORD_SIZE: usize,
     const C: usize,
     const M: usize,
     F,
@@ -583,7 +584,7 @@ pub struct InstructionLookupsProof<
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     Subtables: JoltSubtableSet<F>,
-    InstructionSet: JoltInstructionSet,
+    InstructionSet: JoltInstructionSet<WORD_SIZE>,
     ProofTranscript: Transcript,
 {
     _instructions: PhantomData<InstructionSet>,
@@ -620,9 +621,9 @@ pub struct InstructionLookupsPreprocessing<const C: usize, F: JoltField> {
 
 impl<const C: usize, F: JoltField> InstructionLookupsPreprocessing<C, F> {
     #[tracing::instrument(skip_all, name = "InstructionLookups::preprocess")]
-    pub fn preprocess<const M: usize, InstructionSet, Subtables>() -> Self
+    pub fn preprocess<const WORD_SIZE: usize, const M: usize, InstructionSet, Subtables>() -> Self
     where
-        InstructionSet: JoltInstructionSet,
+        InstructionSet: JoltInstructionSet<WORD_SIZE>,
         Subtables: JoltSubtableSet<F>,
     {
         let materialized_subtables = Self::materialize_subtables::<M, Subtables>();
@@ -690,12 +691,12 @@ impl<const C: usize, F: JoltField> InstructionLookupsPreprocessing<C, F> {
     }
 }
 
-impl<F, PCS, InstructionSet, Subtables, const C: usize, const M: usize, ProofTranscript>
-    InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
+impl<F, PCS, InstructionSet, Subtables, const WORD_SIZE: usize, const C: usize, const M: usize, ProofTranscript>
+    InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
-    InstructionSet: JoltInstructionSet,
+    InstructionSet: JoltInstructionSet<WORD_SIZE>,
     Subtables: JoltSubtableSet<F>,
     ProofTranscript: Transcript,
 {
@@ -709,7 +710,7 @@ where
         preprocessing: &InstructionLookupsPreprocessing<C, F>,
         opening_accumulator: &mut ProverOpeningAccumulator<F, ProofTranscript>,
         transcript: &mut ProofTranscript,
-    ) -> InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript> {
+    ) -> InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript> {
         let protocol_name = Self::protocol_name();
         transcript.append_message(protocol_name);
 
@@ -791,7 +792,7 @@ where
     pub fn verify(
         preprocessing: &InstructionLookupsPreprocessing<C, F>,
         pcs_setup: &PCS::Setup,
-        proof: InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>,
+        proof: InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>,
         commitments: &JoltCommitments<PCS, ProofTranscript>,
         opening_accumulator: &mut VerifierOpeningAccumulator<F, PCS, ProofTranscript>,
         transcript: &mut ProofTranscript,
@@ -864,7 +865,7 @@ where
     #[tracing::instrument(skip_all, name = "InstructionLookupsProof::generate_witness")]
     pub fn generate_witness(
         preprocessing: &InstructionLookupsPreprocessing<C, F>,
-        ops: &Vec<JoltTraceStep<InstructionSet>>,
+        ops: &Vec<JoltTraceStep<WORD_SIZE, InstructionSet>>,
     ) -> InstructionLookupPolynomials<F> {
         let m: usize = ops.len().next_power_of_two();
 
@@ -1224,7 +1225,7 @@ where
 
     /// Converts each instruction in `ops` into its corresponding subtable lookup indices.
     /// The output is `C` vectors, each of length `m`.
-    fn subtable_lookup_indices(ops: &[JoltTraceStep<InstructionSet>]) -> Vec<Vec<u16>> {
+    fn subtable_lookup_indices(ops: &[JoltTraceStep<WORD_SIZE, InstructionSet>]) -> Vec<Vec<u16>> {
         let m = ops.len().next_power_of_two();
         let log_M = M.log_2();
         let chunked_indices: Vec<Vec<u16>> = ops
@@ -1253,7 +1254,7 @@ where
     }
 
     #[tracing::instrument(skip_all, name = "InstructionLookupsProof::compute_lookup_outputs")]
-    fn compute_lookup_outputs(instructions: &Vec<JoltTraceStep<InstructionSet>>) -> Vec<u32> {
+    fn compute_lookup_outputs(instructions: &Vec<JoltTraceStep<WORD_SIZE, InstructionSet>>) -> Vec<u32> {
         instructions
             .par_iter()
             .map(|op| {

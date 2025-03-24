@@ -1,6 +1,6 @@
 use crate::field::JoltField;
 use crate::host;
-use crate::jolt::vm::rv_i_vm::{RV32IJoltVM, C, M};
+use crate::jolt::vm::rv_i_vm::{RV_IJoltVM, C, M};
 use crate::jolt::vm::Jolt;
 use crate::poly::commitment::commitment_scheme::CommitmentScheme;
 use crate::poly::commitment::hyperkzg::HyperKZG;
@@ -32,7 +32,7 @@ pub enum BenchType {
 }
 
 #[allow(unreachable_patterns)] // good errors on new BenchTypes
-pub fn benchmarks(
+pub fn benchmarks<const WORD_SIZE: usize>(
     pcs_type: PCSType,
     bench_type: BenchType,
     _num_cycles: Option<usize>,
@@ -41,26 +41,26 @@ pub fn benchmarks(
 ) -> Vec<(tracing::Span, Box<dyn FnOnce()>)> {
     match pcs_type {
         PCSType::Zeromorph => match bench_type {
-            BenchType::Sha2 => sha2::<Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>(),
-            BenchType::Sha3 => sha3::<Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>(),
+            BenchType::Sha2 => sha2::<WORD_SIZE, Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>(),
+            BenchType::Sha3 => sha3::<WORD_SIZE, Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>(),
             BenchType::Sha2Chain => {
-                sha2chain::<Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>()
+                sha2chain::<WORD_SIZE, Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>()
             }
             BenchType::Fibonacci => {
-                fibonacci::<Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>()
+                fibonacci::<WORD_SIZE, Fr, Zeromorph<Bn254, KeccakTranscript>, KeccakTranscript>()
             }
             BenchType::Shout => shout::<Fr, KeccakTranscript>(),
             BenchType::Twist => twist::<Fr, KeccakTranscript>(),
             _ => panic!("BenchType does not have a mapping"),
         },
         PCSType::HyperKZG => match bench_type {
-            BenchType::Sha2 => sha2::<Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>(),
-            BenchType::Sha3 => sha3::<Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>(),
+            BenchType::Sha2 => sha2::<WORD_SIZE, Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>(),
+            BenchType::Sha3 => sha3::<WORD_SIZE, Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>(),
             BenchType::Sha2Chain => {
-                sha2chain::<Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>()
+                sha2chain::<WORD_SIZE, Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>()
             }
             BenchType::Fibonacci => {
-                fibonacci::<Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>()
+                fibonacci::<WORD_SIZE, Fr, HyperKZG<Bn254, KeccakTranscript>, KeccakTranscript>()
             }
             BenchType::Shout => shout::<Fr, KeccakTranscript>(),
             BenchType::Twist => twist::<Fr, KeccakTranscript>(),
@@ -178,31 +178,31 @@ where
     tasks
 }
 
-fn fibonacci<F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
+fn fibonacci<const WORD_SIZE: usize, F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     ProofTranscript: Transcript,
 {
-    prove_example::<u32, PCS, F, ProofTranscript>("fibonacci-guest", &9u32)
+    prove_example::<WORD_SIZE, u32, PCS, F, ProofTranscript>("fibonacci-guest", &9u32)
 }
 
-fn sha2<F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
+fn sha2<const WORD_SIZE: usize, F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     ProofTranscript: Transcript,
 {
-    prove_example::<Vec<u8>, PCS, F, ProofTranscript>("sha2-guest", &vec![5u8; 2048])
+    prove_example::<WORD_SIZE, Vec<u8>, PCS, F, ProofTranscript>("sha2-guest", &vec![5u8; 2048])
 }
 
-fn sha3<F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
+fn sha3<const WORD_SIZE: usize, F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
     ProofTranscript: Transcript,
 {
-    prove_example::<Vec<u8>, PCS, F, ProofTranscript>("sha3-guest", &vec![5u8; 2048])
+    prove_example::<WORD_SIZE, Vec<u8>, PCS, F, ProofTranscript>("sha3-guest", &vec![5u8; 2048])
 }
 
 #[allow(dead_code)]
@@ -216,7 +216,7 @@ fn serialize_and_print_size(name: &str, item: &impl ark_serialize::CanonicalSeri
     println!("{:<30} : {:.3} MB", name, file_size_mb);
 }
 
-fn prove_example<T: Serialize, PCS, F, ProofTranscript>(
+fn prove_example<const WORD_SIZE: usize, T: Serialize, PCS, F, ProofTranscript>(
     example_name: &str,
     input: &T,
 ) -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
@@ -234,7 +234,7 @@ where
         let (io_device, trace) = program.trace();
 
         let preprocessing: crate::jolt::vm::JoltPreprocessing<C, F, PCS, ProofTranscript> =
-            RV32IJoltVM::preprocess(
+            RV_IJoltVM::<WORD_SIZE>::preprocess(
                 bytecode.clone(),
                 io_device.memory_layout.clone(),
                 memory_init,
@@ -244,7 +244,7 @@ where
             );
 
         let (jolt_proof, jolt_commitments, _) =
-            <RV32IJoltVM as Jolt<_, PCS, C, M, ProofTranscript>>::prove(
+            <RV_IJoltVM::<WORD_SIZE> as Jolt<_, PCS, C, M, WORD_SIZE, ProofTranscript>>::prove(
                 io_device,
                 trace,
                 preprocessing.clone(),
@@ -265,7 +265,7 @@ where
         );
 
         let verification_result =
-            RV32IJoltVM::verify(preprocessing, jolt_proof, jolt_commitments, None);
+            RV_IJoltVM::<WORD_SIZE>::verify(preprocessing, jolt_proof, jolt_commitments, None);
         assert!(
             verification_result.is_ok(),
             "Verification failed with error: {:?}",
@@ -281,7 +281,7 @@ where
     tasks
 }
 
-fn sha2chain<F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
+fn sha2chain<const WORD_SIZE: usize, F, PCS, ProofTranscript>() -> Vec<(tracing::Span, Box<dyn FnOnce()>)>
 where
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
@@ -297,7 +297,7 @@ where
         let (io_device, trace) = program.trace();
 
         let preprocessing: crate::jolt::vm::JoltPreprocessing<C, F, PCS, ProofTranscript> =
-            RV32IJoltVM::preprocess(
+        RV_IJoltVM::<WORD_SIZE>::preprocess(
                 bytecode.clone(),
                 io_device.memory_layout.clone(),
                 memory_init,
@@ -307,13 +307,13 @@ where
             );
 
         let (jolt_proof, jolt_commitments, _) =
-            <RV32IJoltVM as Jolt<_, PCS, C, M, ProofTranscript>>::prove(
+            <RV_IJoltVM::<WORD_SIZE> as Jolt<_, PCS, C, M, WORD_SIZE, ProofTranscript>>::prove(
                 io_device,
                 trace,
                 preprocessing.clone(),
             );
         let verification_result =
-            RV32IJoltVM::verify(preprocessing, jolt_proof, jolt_commitments, None);
+        RV_IJoltVM::<WORD_SIZE>::verify(preprocessing, jolt_proof, jolt_commitments, None);
         assert!(
             verification_result.is_ok(),
             "Verification failed with error: {:?}",

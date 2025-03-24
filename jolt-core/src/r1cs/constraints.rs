@@ -61,139 +61,139 @@ impl<const WORD_SIZE: usize, const C: usize, F: JoltField> R1CSConstraints<C, F>
     type Inputs = JoltR1CSInputs<WORD_SIZE>;
 
     fn uniform_constraints(cs: &mut R1CSBuilder<C, F, Self::Inputs>, memory_start: u64) {
-        use JoltR1CSInputs<WORD_SIZE> as JoltR1CSInputs;
 
         for flag in RV_I::<WORD_SIZE>::iter() {
-            cs.constrain_binary(JoltR1CSInputs::InstructionFlags(flag));
+            cs.constrain_binary(JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(flag));
         }
         for flag in CircuitFlags::iter() {
-            cs.constrain_binary(JoltR1CSInputs::OpFlags(flag));
+            cs.constrain_binary(JoltR1CSInputs::<WORD_SIZE>::OpFlags(flag));
         }
 
         let flags = CircuitFlags::iter()
-            .map(|flag| JoltR1CSInputs::OpFlags(flag).into())
-            .chain(RV_I::<WORD_SIZE>::iter().map(|flag| JoltR1CSInputs::InstructionFlags(flag).into()))
+            .map(|flag| JoltR1CSInputs::<WORD_SIZE>::OpFlags(flag).into())
+            .chain(RV_I::<WORD_SIZE>::iter().map(|flag| JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(flag).into()))
             .collect();
-        cs.constrain_pack_be(flags, JoltR1CSInputs::Bytecode_Bitflags, 1);
+        cs.constrain_pack_be(flags, JoltR1CSInputs::<WORD_SIZE>::Bytecode_Bitflags, 1);
 
         // TODO(Maks) check for rv64
         let real_pc =
-            4i64 * JoltR1CSInputs::Bytecode_ELFAddress + (PC_START_ADDRESS - PC_NOOP_SHIFT);
+            4i64 * JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress + (PC_START_ADDRESS - PC_NOOP_SHIFT);
         let x = cs.allocate_if_else(
-            JoltR1CSInputs::Aux(AuxVariable::LeftLookupOperand),
-            JoltR1CSInputs::OpFlags(CircuitFlags::LeftOperandIsPC),
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::LeftLookupOperand),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::LeftOperandIsPC),
             real_pc,
-            JoltR1CSInputs::RS1_Read,
+            JoltR1CSInputs::<WORD_SIZE>::RS1_Read,
         );
         let y = cs.allocate_if_else(
-            JoltR1CSInputs::Aux(AuxVariable::RightLookupOperand),
-            JoltR1CSInputs::OpFlags(CircuitFlags::RightOperandIsImm),
-            JoltR1CSInputs::Bytecode_Imm,
-            JoltR1CSInputs::RS2_Read,
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::RightLookupOperand),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::RightOperandIsImm),
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_Imm,
+            JoltR1CSInputs::<WORD_SIZE>::RS2_Read,
         );
 
-        let is_load_or_store = JoltR1CSInputs::OpFlags(CircuitFlags::Load)
-            + JoltR1CSInputs::OpFlags(CircuitFlags::Store);
+        let is_load_or_store = JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Load)
+            + JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Store);
         // TODO(Maks) check for rv 64
         let memory_start: i64 = memory_start.try_into().unwrap();
         cs.constrain_eq_conditional(
             is_load_or_store,
-            JoltR1CSInputs::RS1_Read + JoltR1CSInputs::Bytecode_Imm,
-            4 * JoltR1CSInputs::RAM_Address + memory_start - 4 * REGISTER_COUNT as i64,
+            JoltR1CSInputs::<WORD_SIZE>::RS1_Read + JoltR1CSInputs::<WORD_SIZE>::Bytecode_Imm,
+            4 * JoltR1CSInputs::<WORD_SIZE>::RAM_Address + memory_start - 4 * REGISTER_COUNT as i64,
         );
 
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::Load),
-            JoltR1CSInputs::RAM_Read,
-            JoltR1CSInputs::RAM_Write,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Load),
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Read,
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Write,
         );
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::Load),
-            JoltR1CSInputs::RAM_Read,
-            JoltR1CSInputs::RD_Write,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Load),
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Read,
+            JoltR1CSInputs::<WORD_SIZE>::RD_Write,
         );
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::Store),
-            JoltR1CSInputs::RS2_Read,
-            JoltR1CSInputs::RAM_Write,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Store),
+            JoltR1CSInputs::<WORD_SIZE>::RS2_Read,
+            JoltR1CSInputs::<WORD_SIZE>::RAM_Write,
         );
 
         let query_chunks: Vec<Variable> = (0..C)
-            .map(|i| Variable::Input(JoltR1CSInputs::ChunksQuery(i).to_index::<C>()))
+            .map(|i| Variable::Input(JoltR1CSInputs::<WORD_SIZE>::ChunksQuery(i).to_index::<C>()))
             .collect();
         let packed_query =
-            R1CSBuilder::<C, F, JoltR1CSInputs>::pack_be(query_chunks.clone(), LOG_M);
+            R1CSBuilder::<C, F, JoltR1CSInputs::<WORD_SIZE>>::pack_be(query_chunks.clone(), LOG_M);
 
+        // TODO(Maks) check for rv64
         // For the `AssertAlignedMemoryAccessInstruction` lookups, we add the `rs1` and `imm` values
         // to obtain the memory address being accessed.
-        let add_operands = JoltR1CSInputs::InstructionFlags(ADDInstruction::default().into())
-            + JoltR1CSInputs::InstructionFlags(
+        let add_operands = JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(ADDInstruction::default().into())
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(
                 AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 2>::default().into(),
             )
-            + JoltR1CSInputs::InstructionFlags(
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(
                 AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 4>::default().into(),
             );
         cs.constrain_eq_conditional(add_operands, packed_query.clone(), x + y);
         // Converts from unsigned to twos-complement representation
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::InstructionFlags(SUBInstruction::default().into()),
+            JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(SUBInstruction::default().into()),
             packed_query.clone(),
             x - y + (0xffffffffi64 + 1),
         );
-        let is_mul = JoltR1CSInputs::InstructionFlags(MULInstruction::default().into())
-            + JoltR1CSInputs::InstructionFlags(MULUInstruction::default().into())
-            + JoltR1CSInputs::InstructionFlags(MULHUInstruction::default().into());
+        let is_mul = JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(MULInstruction::default().into())
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(MULUInstruction::default().into())
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(MULHUInstruction::default().into());
         let product = cs.allocate_prod(
-            JoltR1CSInputs::Aux(AuxVariable::Product),
-            JoltR1CSInputs::RS1_Read,
-            JoltR1CSInputs::RS2_Read,
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::Product),
+            JoltR1CSInputs::<WORD_SIZE>::RS1_Read,
+            JoltR1CSInputs::<WORD_SIZE>::RS2_Read,
         );
         cs.constrain_eq_conditional(is_mul, packed_query.clone(), product);
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::InstructionFlags(MOVSIGNInstruction::default().into())
-                + JoltR1CSInputs::InstructionFlags(MOVEInstruction::default().into()),
+            JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(MOVSIGNInstruction::default().into())
+                + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(MOVEInstruction::default().into()),
             packed_query.clone(),
             x,
         );
 
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::Assert),
-            JoltR1CSInputs::LookupOutput,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Assert),
+            JoltR1CSInputs::<WORD_SIZE>::LookupOutput,
             1,
         );
 
         let x_chunks: Vec<Variable> = (0..C)
-            .map(|i| Variable::Input(JoltR1CSInputs::ChunksX(i).to_index::<C>()))
+            .map(|i| Variable::Input(JoltR1CSInputs::<WORD_SIZE>::ChunksX(i).to_index::<C>()))
             .collect();
         let y_chunks: Vec<Variable> = (0..C)
-            .map(|i| Variable::Input(JoltR1CSInputs::ChunksY(i).to_index::<C>()))
+            .map(|i| Variable::Input(JoltR1CSInputs::<WORD_SIZE>::ChunksY(i).to_index::<C>()))
             .collect();
-        let x_concat = R1CSBuilder::<C, F, JoltR1CSInputs>::pack_be(x_chunks.clone(), OPERAND_SIZE);
-        let y_concat = R1CSBuilder::<C, F, JoltR1CSInputs>::pack_be(y_chunks.clone(), OPERAND_SIZE);
+        let x_concat = R1CSBuilder::<C, F, JoltR1CSInputs::<WORD_SIZE>>::pack_be(x_chunks.clone(), OPERAND_SIZE);
+        let y_concat = R1CSBuilder::<C, F, JoltR1CSInputs::<WORD_SIZE>>::pack_be(y_chunks.clone(), OPERAND_SIZE);
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
             x_concat,
             x,
         );
         cs.constrain_eq_conditional(
-            JoltR1CSInputs::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
             y_concat,
             y,
         );
 
         // if is_shift ? chunks_query[i] == zip(chunks_x[i], chunks_y[C-1]) : chunks_query[i] == zip(chunks_x[i], chunks_y[i])
-        let is_shift = JoltR1CSInputs::InstructionFlags(SLLInstruction::default().into())
-            + JoltR1CSInputs::InstructionFlags(SRLInstruction::default().into())
-            + JoltR1CSInputs::InstructionFlags(SRAInstruction::default().into());
+        let is_shift = JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(SLLInstruction::default().into())
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(SRLInstruction::default().into())
+            + JoltR1CSInputs::<WORD_SIZE>::InstructionFlags(SRAInstruction::default().into());
         for i in 0..C {
             let relevant_chunk_y = cs.allocate_if_else(
-                JoltR1CSInputs::Aux(AuxVariable::RelevantYChunk(i)),
+                JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::RelevantYChunk(i)),
                 is_shift.clone(),
                 y_chunks[C - 1],
                 y_chunks[i],
             );
             cs.constrain_eq_conditional(
-                JoltR1CSInputs::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
+                JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::ConcatLookupQueryChunks),
                 query_chunks[i],
                 x_chunks[i] * (1i64 << 8) + relevant_chunk_y,
             );
@@ -201,46 +201,46 @@ impl<const WORD_SIZE: usize, const C: usize, F: JoltField> R1CSConstraints<C, F>
 
         // if (rd != 0 && update_rd_with_lookup_output == 1) constrain(rd_val == LookupOutput)
         let rd_nonzero_and_lookup_to_rd = cs.allocate_prod(
-            JoltR1CSInputs::Aux(AuxVariable::WriteLookupOutputToRD),
-            JoltR1CSInputs::Bytecode_RD,
-            JoltR1CSInputs::OpFlags(CircuitFlags::WriteLookupOutputToRD),
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::WriteLookupOutputToRD),
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_RD,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::WriteLookupOutputToRD),
         );
         cs.constrain_eq_conditional(
             rd_nonzero_and_lookup_to_rd,
-            JoltR1CSInputs::RD_Write,
-            JoltR1CSInputs::LookupOutput,
+            JoltR1CSInputs::<WORD_SIZE>::RD_Write,
+            JoltR1CSInputs::<WORD_SIZE>::LookupOutput,
         );
         // if (rd != 0 && is_jump_instr == 1) constrain(rd_val == 4 * PC)
         let rd_nonzero_and_jmp = cs.allocate_prod(
-            JoltR1CSInputs::Aux(AuxVariable::WritePCtoRD),
-            JoltR1CSInputs::Bytecode_RD,
-            JoltR1CSInputs::OpFlags(CircuitFlags::Jump),
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::WritePCtoRD),
+            JoltR1CSInputs::<WORD_SIZE>::Bytecode_RD,
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Jump),
         );
         cs.constrain_eq_conditional(
             rd_nonzero_and_jmp,
-            4 * JoltR1CSInputs::Bytecode_ELFAddress + PC_START_ADDRESS,
-            JoltR1CSInputs::RD_Write,
+            4 * JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress + PC_START_ADDRESS,
+            JoltR1CSInputs::<WORD_SIZE>::RD_Write,
         );
 
         let next_pc_jump = cs.allocate_if_else(
-            JoltR1CSInputs::Aux(AuxVariable::NextPCJump),
-            JoltR1CSInputs::OpFlags(CircuitFlags::Jump),
-            JoltR1CSInputs::LookupOutput + 4,
-            4 * JoltR1CSInputs::Bytecode_ELFAddress + PC_START_ADDRESS + 4
-                - 4 * JoltR1CSInputs::OpFlags(CircuitFlags::DoNotUpdatePC),
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::NextPCJump),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Jump),
+            JoltR1CSInputs::<WORD_SIZE>::LookupOutput + 4,
+            4 * JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress + PC_START_ADDRESS + 4
+                - 4 * JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::DoNotUpdatePC),
         );
 
         let should_branch = cs.allocate_prod(
-            JoltR1CSInputs::Aux(AuxVariable::ShouldBranch),
-            JoltR1CSInputs::OpFlags(CircuitFlags::Branch),
-            JoltR1CSInputs::LookupOutput,
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::ShouldBranch),
+            JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Branch),
+            JoltR1CSInputs::<WORD_SIZE>::LookupOutput,
         );
         let _next_pc = cs.allocate_if_else(
-            JoltR1CSInputs::Aux(AuxVariable::NextPC),
+            JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::NextPC),
             should_branch,
-            4 * JoltR1CSInputs::Bytecode_ELFAddress
+            4 * JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress
                 + PC_START_ADDRESS
-                + JoltR1CSInputs::Bytecode_Imm,
+                + JoltR1CSInputs::<WORD_SIZE>::Bytecode_Imm,
             next_pc_jump,
         );
     }
@@ -249,10 +249,10 @@ impl<const WORD_SIZE: usize, const C: usize, F: JoltField> R1CSConstraints<C, F>
         // If the next instruction's ELF address is not zero (i.e. it's
         // not padding), then check the PC update.
         let pc_constraint = OffsetEqConstraint::new(
-            (JoltR1CSInputs::Bytecode_ELFAddress, true),
-            (JoltR1CSInputs::Aux(AuxVariable::NextPC), false),
+            (JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress, true),
+            (JoltR1CSInputs::<WORD_SIZE>::Aux(AuxVariable::NextPC), false),
             (
-                4 * JoltR1CSInputs::Bytecode_ELFAddress + PC_START_ADDRESS,
+                4 * JoltR1CSInputs::<WORD_SIZE>::Bytecode_ELFAddress + PC_START_ADDRESS,
                 true,
             ),
         );
@@ -265,9 +265,9 @@ impl<const WORD_SIZE: usize, const C: usize, F: JoltField> R1CSConstraints<C, F>
         // trace should always end with some return handling, which shouldn't involve
         // any virtual sequences.
         let virtual_sequence_constraint = OffsetEqConstraint::new(
-            (JoltR1CSInputs::OpFlags(CircuitFlags::Virtual), false),
-            (JoltR1CSInputs::Bytecode_A, true),
-            (JoltR1CSInputs::Bytecode_A + 1, false),
+            (JoltR1CSInputs::<WORD_SIZE>::OpFlags(CircuitFlags::Virtual), false),
+            (JoltR1CSInputs::<WORD_SIZE>::Bytecode_A, true),
+            (JoltR1CSInputs::<WORD_SIZE>::Bytecode_A + 1, false),
         );
 
         vec![pc_constraint, virtual_sequence_constraint]

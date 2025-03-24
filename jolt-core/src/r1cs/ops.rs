@@ -296,13 +296,13 @@ impl std::ops::Mul<Variable> for i64 {
 #[macro_export]
 macro_rules! impl_r1cs_input_lc_conversions {
     ($ConcreteInput:ty, $C:expr) => {
-        impl Into<$crate::r1cs::ops::Variable> for $ConcreteInput {
+        impl<const WORD_SIZE: usize> Into<$crate::r1cs::ops::Variable> for $ConcreteInput {
             fn into(self) -> $crate::r1cs::ops::Variable {
                 $crate::r1cs::ops::Variable::Input(self.to_index::<$C>())
             }
         }
 
-        impl Into<$crate::r1cs::ops::Term> for $ConcreteInput {
+        impl<const WORD_SIZE: usize> Into<$crate::r1cs::ops::Term> for $ConcreteInput {
             fn into(self) -> $crate::r1cs::ops::Term {
                 $crate::r1cs::ops::Term(
                     $crate::r1cs::ops::Variable::Input(self.to_index::<$C>()),
@@ -311,7 +311,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl Into<$crate::r1cs::ops::LC> for $ConcreteInput {
+        impl<const WORD_SIZE: usize> Into<$crate::r1cs::ops::LC> for $ConcreteInput {
             fn into(self) -> $crate::r1cs::ops::LC {
                 $crate::r1cs::ops::Term(
                     $crate::r1cs::ops::Variable::Input(self.to_index::<$C>()),
@@ -321,7 +321,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl Into<$crate::r1cs::ops::LC> for Vec<$ConcreteInput> {
+        impl<const WORD_SIZE: usize> Into<$crate::r1cs::ops::LC> for Vec<$ConcreteInput> {
             fn into(self) -> $crate::r1cs::ops::LC {
                 let terms: Vec<$crate::r1cs::ops::Term> =
                     self.into_iter().map(Into::into).collect();
@@ -329,7 +329,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl<T: Into<$crate::r1cs::ops::LC>> std::ops::Add<T> for $ConcreteInput {
+        impl<const WORD_SIZE: usize, T: Into<$crate::r1cs::ops::LC>> std::ops::Add<T> for $ConcreteInput {
             type Output = $crate::r1cs::ops::LC;
 
             fn add(self, rhs: T) -> Self::Output {
@@ -339,7 +339,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl<T: Into<$crate::r1cs::ops::LC>> std::ops::Sub<T> for $ConcreteInput {
+        impl<const WORD_SIZE: usize, T: Into<$crate::r1cs::ops::LC>> std::ops::Sub<T> for $ConcreteInput {
             type Output = $crate::r1cs::ops::LC;
 
             fn sub(self, rhs: T) -> Self::Output {
@@ -349,7 +349,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl std::ops::Mul<i64> for $ConcreteInput {
+        impl<const WORD_SIZE: usize> std::ops::Mul<i64> for $ConcreteInput {
             type Output = $crate::r1cs::ops::Term;
 
             fn mul(self, rhs: i64) -> Self::Output {
@@ -360,7 +360,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
             }
         }
 
-        impl std::ops::Mul<$ConcreteInput> for i64 {
+        impl<const WORD_SIZE: usize> std::ops::Mul<$ConcreteInput> for i64 {
             type Output = $crate::r1cs::ops::Term;
 
             fn mul(self, rhs: $ConcreteInput) -> Self::Output {
@@ -370,7 +370,7 @@ macro_rules! impl_r1cs_input_lc_conversions {
                 )
             }
         }
-        impl std::ops::Add<$ConcreteInput> for i64 {
+        impl<const WORD_SIZE: usize> std::ops::Add<$ConcreteInput> for i64 {
             type Output = $crate::r1cs::ops::LC;
 
             fn add(self, rhs: $ConcreteInput) -> Self::Output {

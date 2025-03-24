@@ -49,7 +49,7 @@ macro_rules! instruction_set {
         pub enum $enum_name<const WORD_SIZE: usize> {
             $($alias($struct)),+
         }
-        impl<const WORD_SIZE: usize> JoltInstructionSet<WORD_SIZE> for $enum_name<WORD_SIZE> {}
+        impl<const WORD_SIZE: usize> JoltInstructionSet<WORD_SIZE> for $enum_name<WORD_SIZE> {} 
         impl<const WORD_SIZE: usize> $enum_name<WORD_SIZE> {
             pub fn random_instruction(rng: &mut StdRng) -> Self {
                 let index = rng.next_u64() as usize % $enum_name::<WORD_SIZE>::COUNT;
@@ -179,7 +179,7 @@ where
 }
 
 pub type RV_IJoltProof<const WORD_SIZE: usize, F, PCS, ProofTranscript> =
-    JoltProof<C, M, JoltR1CSInputs, F, PCS, RV_I<WORD_SIZE>, RV_ISubtables<WORD_SIZE, F>, ProofTranscript>;
+    JoltProof<WORD_SIZE, C, M, JoltR1CSInputs<WORD_SIZE>, F, PCS, RV_I<WORD_SIZE>, RV_ISubtables<WORD_SIZE, F>, ProofTranscript>;
 
 use crate::utils::transcript::{KeccakTranscript, Transcript};
 use eyre::Result;

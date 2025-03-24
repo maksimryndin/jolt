@@ -239,6 +239,7 @@ pub struct BytecodePreprocessing<F: JoltField> {
 impl<F: JoltField> BytecodePreprocessing<F> {
     #[tracing::instrument(skip_all, name = "BytecodePreprocessing::preprocess")]
     pub fn preprocess(mut bytecode: Vec<BytecodeRow>) -> Self {
+        // TODO(Maks) capacity?
         let mut virtual_address_map = BTreeMap::new();
         let mut virtual_address = 1; // Account for no-op instruction prepended to bytecode
         for instruction in bytecode.iter_mut() {
@@ -268,6 +269,7 @@ impl<F: JoltField> BytecodePreprocessing<F> {
         let code_size = bytecode.len().next_power_of_two();
         bytecode.resize(code_size, BytecodeRow::no_op(0));
 
+        // TODO(Maks) capacity in advance??
         let mut address = vec![];
         let mut bitflags = vec![];
         let mut rd = vec![];
@@ -308,9 +310,9 @@ where
     ProofTranscript: Transcript,
 {
     #[tracing::instrument(skip_all, name = "BytecodeProof::generate_witness")]
-    pub fn generate_witness<InstructionSet: JoltInstructionSet>(
+    pub fn generate_witness<const WORD_SIZE: usize, InstructionSet: JoltInstructionSet<WORD_SIZE>>(
         preprocessing: &BytecodePreprocessing<F>,
-        trace: &mut Vec<JoltTraceStep<InstructionSet>>,
+        trace: &mut Vec<JoltTraceStep<WORD_SIZE, InstructionSet>>,
     ) -> BytecodePolynomials<F> {
         let num_ops = trace.len();
 

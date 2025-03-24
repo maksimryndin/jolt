@@ -72,7 +72,7 @@ where
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct JoltTraceStep<InstructionSet: JoltInstructionSet> {
+pub struct JoltTraceStep<const WORD_SIZE: usize, InstructionSet: JoltInstructionSet<WORD_SIZE>> {
     pub instruction_lookup: Option<InstructionSet>,
     pub bytecode_row: BytecodeRow,
     pub memory_ops: [MemoryOp; MEMORY_OPS_PER_INSTRUCTION],
@@ -88,7 +88,7 @@ where
     pub(crate) opening_accumulator: ProverOpeningAccumulator<F, ProofTranscript>,
 }
 
-impl<InstructionSet: JoltInstructionSet> JoltTraceStep<InstructionSet> {
+impl<const WORD_SIZE: usize, InstructionSet: JoltInstructionSet<WORD_SIZE>> JoltTraceStep<WORD_SIZE, InstructionSet> {
     fn no_op() -> Self {
         JoltTraceStep {
             instruction_lookup: None,
@@ -112,6 +112,7 @@ impl<InstructionSet: JoltInstructionSet> JoltTraceStep<InstructionSet> {
 
 #[derive(CanonicalSerialize, CanonicalDeserialize)]
 pub struct JoltProof<
+    const WORD_SIZE: usize,
     const C: usize,
     const M: usize,
     I,
@@ -124,7 +125,7 @@ pub struct JoltProof<
     I: ConstraintInput,
     F: JoltField,
     PCS: CommitmentScheme<ProofTranscript, Field = F>,
-    InstructionSet: JoltInstructionSet,
+    InstructionSet: JoltInstructionSet<WORD_SIZE>,
     Subtables: JoltSubtableSet<F>,
     ProofTranscript: Transcript,
 {
@@ -133,7 +134,7 @@ pub struct JoltProof<
     pub bytecode: BytecodeProof<F, PCS, ProofTranscript>,
     pub read_write_memory: ReadWriteMemoryProof<F, PCS, ProofTranscript>,
     pub instruction_lookups:
-        InstructionLookupsProof<C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>,
+        InstructionLookupsProof<WORD_SIZE, C, M, F, PCS, InstructionSet, Subtables, ProofTranscript>,
     pub r1cs: UniformSpartanProof<C, I, F, ProofTranscript>,
     pub opening_proof: ReducedOpeningProof<F, PCS, ProofTranscript>,
 }
@@ -308,6 +309,7 @@ where
         icicle::icicle_init();
 
         let instruction_lookups_preprocessing = InstructionLookupsPreprocessing::preprocess::<
+            WORD_SIZE,
             M,
             Self::InstructionSet,
             Self::Subtables,
@@ -361,10 +363,11 @@ where
     #[tracing::instrument(skip_all, name = "Jolt::prove")]
     fn prove(
         program_io: JoltDevice,
-        mut trace: Vec<JoltTraceStep<Self::InstructionSet>>,
+        mut trace: Vec<JoltTraceStep<WORD_SIZE, Self::InstructionSet>>,
         mut preprocessing: JoltPreprocessing<C, F, PCS, ProofTranscript>,
     ) -> (
         JoltProof<
+            WORD_SIZE,
             C,
             M,
             <Self::Constraints as R1CSConstraints<C, F>>::Inputs,
@@ -399,6 +402,7 @@ where
 
         let instruction_polynomials =
             InstructionLookupsProof::<
+                WORD_SIZE,
                 C,
                 M,
                 F,
@@ -440,6 +444,7 @@ where
         >::setup(&r1cs_builder, padded_trace_length);
 
         let r1cs_polynomials = R1CSPolynomials::new::<
+            WORD_SIZE,
             C,
             M,
             Self::InstructionSet,
@@ -542,6 +547,7 @@ where
     fn verify(
         mut preprocessing: JoltPreprocessing<C, F, PCS, ProofTranscript>,
         proof: JoltProof<
+            WORD_SIZE,
             C,
             M,
             <Self::Constraints as R1CSConstraints<C, F>>::Inputs,
@@ -645,6 +651,7 @@ where
         preprocessing: &InstructionLookupsPreprocessing<C, F>,
         generators: &PCS::Setup,
         proof: InstructionLookupsProof<
+            WORD_SIZE,
             C,
             M,
             F,

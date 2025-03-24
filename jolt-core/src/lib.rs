@@ -12,9 +12,8 @@
 #![allow(type_alias_bounds)]
 #![allow(clippy::too_long_first_doc_paragraph)]
 
-// TODO(Maks) make generic
-// #[cfg(feature = "host")]
-// pub mod benches;
+#[cfg(feature = "host")]
+pub mod benches;
 
 #[cfg(feature = "host")]
 pub mod host;

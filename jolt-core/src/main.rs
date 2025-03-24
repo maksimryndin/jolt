@@ -37,6 +37,11 @@ struct TraceArgs {
     #[clap(long, value_enum)]
     name: BenchType,
 
+    /// TODO(Maks) custom type (re-use ISA trait??)
+    /// Register width 64 bits
+    #[clap(short, long, default_value_t = false)]
+    reg_width_64: bool,
+
     /// Number of cycles to run the benchmark for
     #[clap(short, long)]
     num_cycles: Option<usize>,
@@ -116,7 +121,12 @@ fn trace(args: TraceArgs) {
     }
 
     tracing_subscriber::registry().with(layers).init();
-    for (span, bench) in benchmarks(args.pcs, args.name, args.num_cycles, None, None).into_iter() {
+    let iterator = if args.reg_width_64 {
+        benchmarks::<64>(args.pcs, args.name, args.num_cycles, None, None).into_iter()
+    } else {
+        benchmarks::<32>(args.pcs, args.name, args.num_cycles, None, None).into_iter()
+    };
+    for (span, bench) in iterator {
         span.to_owned().in_scope(|| {
             bench();
             tracing::info!("Bench Complete");

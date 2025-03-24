@@ -16,7 +16,7 @@ pub struct ProgramSummary<const WORD_SIZE: usize> {
     pub memory_init: Vec<(u64, u8)>,
 
     pub io_device: JoltDevice,
-    pub processed_trace: Vec<JoltTraceStep<RV_I<WORD_SIZE>>>,
+    pub processed_trace: Vec<JoltTraceStep<WORD_SIZE, RV_I<WORD_SIZE>>>,
 }
 
 impl<const WORD_SIZE: usize> ProgramSummary<WORD_SIZE> {

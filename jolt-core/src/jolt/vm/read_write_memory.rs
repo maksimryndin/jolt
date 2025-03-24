@@ -254,7 +254,7 @@ impl<F: JoltField> ReadWriteMemoryPolynomials<F> {
     pub fn generate_witness<const WORD_SIZE: usize, InstructionSet: JoltInstructionSet<WORD_SIZE>>(
         program_io: &JoltDevice,
         preprocessing: &ReadWriteMemoryPreprocessing,
-        trace: &[JoltTraceStep<InstructionSet>],
+        trace: &[JoltTraceStep<WORD_SIZE, InstructionSet>],
     ) -> Self {
         assert!(program_io.inputs.len() <= program_io.memory_layout.max_input_size as usize);
         assert!(program_io.outputs.len() <= program_io.memory_layout.max_output_size as usize);

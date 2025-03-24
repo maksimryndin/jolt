@@ -70,7 +70,7 @@ pub trait JoltInstruction: Clone + Debug + Send + Sync + Serialize {
     }
 }
 
-pub trait JoltInstructionSet<const WORD_SIZE: usize>:
+pub trait JoltInstructionSet<const WORD_SIZE: usize>: 
     JoltInstruction + IntoEnumIterator + EnumCount + for<'a> TryFrom<&'a ELFInstruction<{WORD_SIZE}>> + Send + Sync
 {
     fn enum_index(instruction: &Self) -> usize {
