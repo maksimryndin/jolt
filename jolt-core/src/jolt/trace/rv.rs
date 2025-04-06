@@ -23,6 +23,7 @@ use crate::jolt::instruction::virtual_move::MOVEInstruction;
 use crate::jolt::instruction::xor::XORInstruction;
 use crate::jolt::instruction::{add::ADDInstruction, virtual_movsign::MOVSIGNInstruction};
 use crate::jolt::vm::rv_i_vm::RV_I;
+use crate::jolt::instruction::{addw::ADDWInstruction, subw::SUBWInstruction, sllw::SLLWInstruction, srlw::SRLWInstruction};
 use common::rv_trace::{ELFInstruction, RVTraceRow, RV_IM};
 
 impl<const WORD_SIZE: usize> TryFrom<&ELFInstruction<WORD_SIZE>> for RV_I<WORD_SIZE> {
@@ -79,6 +80,12 @@ impl<const WORD_SIZE: usize> TryFrom<&ELFInstruction<WORD_SIZE>> for RV_I<WORD_S
             VIRTUAL_ASSERT_VALID_DIV0 => Ok(AssertValidDiv0Instruction::default().into()),
             VIRTUAL_ASSERT_HALFWORD_ALIGNMENT => Ok(AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 2>::default().into()),
             // TODO(Maks) add 64b instructions
+            ADDW if WORD_SIZE == 64 => Ok(ADDWInstruction::default().into()),
+            SLLW if WORD_SIZE == 64 => Ok(SLLWInstruction::default().into()),
+            SUBW if WORD_SIZE == 64 => Ok(SUBWInstruction::default().into()),
+            ADDIW if WORD_SIZE == 64 => Ok(ADDWInstruction::default().into()),
+            SLLIW if WORD_SIZE == 64 => Ok(SLLWInstruction::default().into()),
+            SRLIW if WORD_SIZE == 64 => Ok(SRLWInstruction::default().into()),
             _ if WORD_SIZE == 64 => Err("No corresponding RV64I instruction"),
             _ => Err("No corresponding RV32I instruction")
         }
@@ -140,6 +147,12 @@ impl<const WORD_SIZE: usize> TryFrom<&RVTraceRow<WORD_SIZE>> for RV_I<WORD_SIZE>
             VIRTUAL_ASSERT_HALFWORD_ALIGNMENT => Ok(AssertAlignedMemoryAccessInstruction::<WORD_SIZE, 2>(row.register_state.rs1_val.unwrap(), row.imm()).into()),
 
             // TODO(Maks) add 64b instructions
+            ADDW if WORD_SIZE == 64 => Ok(ADDWInstruction(row.register_state.rs1_val.unwrap(), row.register_state.rs2_val.unwrap()).into()),
+            SLLW if WORD_SIZE == 64 => Ok(SLLWInstruction(row.register_state.rs1_val.unwrap(), row.register_state.rs2_val.unwrap()).into()),
+            SUBW if WORD_SIZE == 64 => Ok(SUBWInstruction(row.register_state.rs1_val.unwrap(), row.register_state.rs2_val.unwrap()).into()),
+            ADDIW if WORD_SIZE == 64 => Ok(ADDWInstruction(row.register_state.rs1_val.unwrap(), row.imm()).into()),
+            SLLIW if WORD_SIZE == 64 => Ok(SLLWInstruction(row.register_state.rs1_val.unwrap(), row.imm()).into()),
+            SRLIW if WORD_SIZE == 64 => Ok(SRLWInstruction(row.register_state.rs1_val.unwrap(), row.imm()).into()),
             _ if WORD_SIZE == 64 => Err("No corresponding RV64I instruction"),
             _ => Err("No corresponding RV32I instruction")
         }

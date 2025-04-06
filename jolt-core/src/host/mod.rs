@@ -102,7 +102,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
     pub fn build(&mut self) {
         if self.elf.is_none() {
             // TODO(Maks) check self.std flag, understand why feature `guest-std` is present
-            // #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_arch = "wasm32"))]
             install_toolchain().unwrap();
             #[cfg(not(target_arch = "wasm32"))]
             install_no_std_toolchain().unwrap();
@@ -127,7 +127,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
             // TODO(Maks) add a flag argument to provable macros to discriminate between rv64 and rv32
             // for rv64 we need a custom toolchain anyway
             // use WORD_SIZE
-            self.std = true; // for rv32 and rv64n we need a different discriminator
+            self.std = WORD_SIZE == 64; // for rv32 and rv64n we need a different discriminator
             let toolchain = if self.std {
                 "riscv64ima-jolt-zkvm-elf"
             } else {
@@ -185,7 +185,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
         // TODO(Maks) allocate capacity in advance?
         let mut elf_contents = Vec::new();
         elf_file.read_to_end(&mut elf_contents).unwrap();
-       tracer::decode(&elf_contents)
+        tracer::decode(&elf_contents)
     }
 
     // TODO(moodlezoup): Make this generic over InstructionSet
@@ -194,6 +194,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
         use tracer::RV_IM::*;
         self.build();
         let elf = self.elf.clone().unwrap();
+
         let (raw_trace, io_device) =
             tracer::trace(&elf, &self.input, self.max_input_size, self.max_output_size);
 
@@ -241,6 +242,7 @@ impl<const WORD_SIZE: usize> Program<WORD_SIZE> {
             tracer::trace(elf, &self.input, self.max_input_size, self.max_output_size);
 
         let (bytecode, memory_init) = self.decode();
+        
         let (io_device, processed_trace) = self.trace();
 
         ProgramSummary {

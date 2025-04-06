@@ -108,6 +108,11 @@ impl<const WORD_SIZE: usize> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_
             | REM
             | REMU => [rs1_read(), rs2_read(), rd_write(), MemoryOp::noop_read()],
 
+            ADDW 
+            | SLLW
+            | SUBW if WORD_SIZE == 64
+            => [rs1_read(), rs2_read(), rd_write(), MemoryOp::noop_read()],
+
             LUI | AUIPC | VIRTUAL_ADVICE => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
@@ -140,12 +145,31 @@ impl<const WORD_SIZE: usize> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_
                 MemoryOp::noop_read(),
             ],
 
+            ADDIW
+            | SLLIW
+            | SRLIW if WORD_SIZE == 64
+            => [
+                rs1_read(),
+                MemoryOp::noop_read(),
+                rd_write(),
+                MemoryOp::noop_read(),
+            ],
+
             LW => [
                 rs1_read(),
                 MemoryOp::noop_read(),
                 rd_write(),
                 MemoryOp::Read(rs1_offset()),
             ],
+
+            LD if WORD_SIZE == 64
+            => [
+                rs1_read(),
+                MemoryOp::noop_read(),
+                rd_write(),
+                MemoryOp::Read(rs1_offset()),
+            ],
+
             FENCE => [
                 MemoryOp::noop_read(),
                 MemoryOp::noop_read(),
@@ -153,7 +177,16 @@ impl<const WORD_SIZE: usize> From<&RVTraceRow<WORD_SIZE>> for [MemoryOp; MEMORY_
                 MemoryOp::noop_read(),
             ],
 
-            SB | SH | SW => [
+            SB | SH | SW
+            => [
+                rs1_read(),
+                rs2_read(),
+                MemoryOp::noop_write(),
+                MemoryOp::Write(rs1_offset(), ram_write_value()),
+            ],
+
+            SD if WORD_SIZE == 64
+            => [
                 rs1_read(),
                 rs2_read(),
                 MemoryOp::noop_write(),
@@ -265,7 +298,9 @@ impl<const WORD_SIZE: usize> ELFInstruction<WORD_SIZE> {
             | ORI
             | ANDI
             | SLLI
+            | SLLIW
             | SRLI
+            | SRLIW
             | SRAI
             | SLTI
             | SLTIU
@@ -274,17 +309,19 @@ impl<const WORD_SIZE: usize> ELFInstruction<WORD_SIZE> {
             | JALR
             | SW
             | LW
+            | SD
+            | LD
             | VIRTUAL_ASSERT_HALFWORD_ALIGNMENT,
         );
 
         flags[CircuitFlags::Load as usize] = matches!(
             self.opcode,
-            LW,
+            LW | LD,
         );
 
         flags[CircuitFlags::Store as usize] = matches!(
             self.opcode,
-            SW,
+            SW | SD,
         );
 
         flags[CircuitFlags::Jump as usize] = matches!(
@@ -297,11 +334,13 @@ impl<const WORD_SIZE: usize> ELFInstruction<WORD_SIZE> {
             BEQ | BNE | BLT | BGE | BLTU | BGEU,
         );
 
-        // Stores, branches, jumps, and asserts do not store the lookup output to rd (they may update rd in other ways)
+        // Stores, loads, branches, jumps, and asserts do not store the lookup output to rd (they may update rd in other ways)
         flags[CircuitFlags::WriteLookupOutputToRD as usize] = !matches!(
             self.opcode,
             SW
             | LW
+            | SD
+            | LD
             | BEQ
             | BNE
             | BLT
@@ -329,6 +368,7 @@ impl<const WORD_SIZE: usize> ELFInstruction<WORD_SIZE> {
             | ANDI
             | SLL
             | SRL
+            | SLLW
             | SRA
             | SLLI
             | SRLI
@@ -459,7 +499,14 @@ pub enum RV_IM<const WORD_SIZE: usize> {
     FENCE,
     UNIMPL,
     // 64 bit instructions
-    //ADDW,
+    ADDW,
+    ADDIW,
+    SUBW,
+    SLLIW,
+    SLLW,
+    SRLIW,
+    LD,
+    SD,
     // Virtual instructions
     VIRTUAL_MOVSIGN,
     VIRTUAL_MOVE,
@@ -528,8 +575,14 @@ impl<const WORD_SIZE: usize> FromStr for RV_IM<WORD_SIZE> {
             "FENCE" => Ok(Self::FENCE),
             "UNIMPL" => Ok(Self::UNIMPL),
             // TODO(Maks) => add 64 bit instructions with the check of WORD_SIZE
-            //"ADDW" if WORD_SIZE == 64 => Ok(Self::ADDW),
-            _ => Err(format!("Could not match instruction to RV{WORD_SIZE}IM set.")),
+            "ADDIW" if WORD_SIZE == 64 => Ok(Self::ADDIW),
+            "SUBW" if WORD_SIZE == 64 => Ok(Self::SUBW),
+            "SLLIW" if WORD_SIZE == 64 => Ok(Self::SLLIW),
+            "SLLW" if WORD_SIZE == 64 => Ok(Self::SLLW),
+            "SRLIW" if WORD_SIZE == 64 => Ok(Self::SRLIW),
+            "LD" if WORD_SIZE == 64 => Ok(Self::LD),
+            "SD" if WORD_SIZE == 64 => Ok(Self::SD),
+            _ => Err(format!("Could not match instruction {s} to RV{WORD_SIZE}IM set.")),
         }
     }
 }

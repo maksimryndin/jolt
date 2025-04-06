@@ -1937,7 +1937,7 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
             Ok(())
         },
         disassemble: dump_format_i,
-        trace: None,
+        trace: Some(trace_i),
     },
     Instruction {
         mask: 0xfe00707f,
@@ -2982,7 +2982,7 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
             Ok(())
         },
         disassemble: dump_format_i_mem,
-        trace: None,
+        trace: Some(trace_i),
     },
     Instruction {
         mask: 0x0000707f,
@@ -3383,7 +3383,7 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
                 .store_doubleword(cpu.x[f.rs1].wrapping_add(f.imm) as u64, cpu.x[f.rs2] as u64)
         },
         disassemble: dump_format_s,
-        trace: None,
+        trace: Some(trace_s),
     },
     Instruction {
         mask: 0xfe007fff,
@@ -3443,13 +3443,14 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
         data: 0x0000101b,
         name: "SLLIW",
         operation: |cpu, word, _address| {
-            let f = parse_format_r(word);
-            let shamt = f.rs2 as u32;
+            let f = parse_format_i(word);
+            // lower 6 bits for shamt
+            let shamt = f.imm & 0x3f;
             cpu.x[f.rd] = (cpu.x[f.rs1] << shamt) as i32 as i64;
             Ok(())
         },
         disassemble: dump_format_r,
-        trace: None,
+        trace: Some(trace_i),
     },
     Instruction {
         mask: 0xfe00707f,
@@ -3461,7 +3462,7 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
             Ok(())
         },
         disassemble: dump_format_r,
-        trace: None,
+        trace: Some(trace_r),
     },
     Instruction {
         mask: 0xfe00707f,
@@ -3648,18 +3649,14 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
         data: 0x0000501b,
         name: "SRLIW",
         operation: |cpu, word, _address| {
-            let f = parse_format_r(word);
-            let mask = match cpu.xlen() {
-                32 => 0x1f,
-                64 => 0x3f,
-                _ => panic!("incorrect XLEN")
-            };
-            let shamt = (word >> 20) & mask;
+            let f = parse_format_i(word);
+            // lower 6 bits for unsigned shamt
+            let shamt = (f.imm & 0x3f) as u32;
             cpu.x[f.rd] = ((cpu.x[f.rs1] as u32) >> shamt) as i32 as i64;
             Ok(())
         },
         disassemble: dump_format_r,
-        trace: None,
+        trace: Some(trace_i),
     },
     Instruction {
         mask: 0xfe00707f,
@@ -3695,7 +3692,7 @@ pub const INSTRUCTIONS<const XLEN: usize>: [Instruction<{XLEN}>; INSTRUCTION_NUM
             Ok(())
         },
         disassemble: dump_format_r,
-        trace: None,
+        trace: Some(trace_r),
     },
     Instruction {
         mask: 0x0000707f,

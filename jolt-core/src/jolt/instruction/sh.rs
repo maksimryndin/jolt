@@ -153,6 +153,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for SHInstruc
             precompile_output_address: None,
         });
 
+        // TODO(Maks) add ANDI mask 0x3 for 64 bits (as for SB)
         let bit_shift = SLLInstruction::<WORD_SIZE>(ram_address, 3).lookup_entry();
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {

@@ -29,6 +29,7 @@ use crate::jolt::instruction::{
     virtual_movsign::MOVSIGNInstruction, xor::XORInstruction, JoltInstruction, JoltInstructionSet,
     SubtableIndices,
 };
+use crate::jolt::instruction::{addw::ADDWInstruction, subw::SUBWInstruction, sllw::SLLWInstruction, srlw::SRLWInstruction};
 use crate::jolt::subtable::{
     and::AndSubtable, eq::EqSubtable, eq_abs::EqAbsSubtable, identity::IdentitySubtable,
     left_is_zero::LeftIsZeroSubtable, left_msb::LeftMSBSubtable, lt_abs::LtAbsSubtable,
@@ -79,8 +80,8 @@ macro_rules! subtable_enum {
         #[repr(u8)]
         #[enum_dispatch(LassoSubtable<F>)]
         #[derive(EnumCountMacro, EnumIter)]
-        pub enum $enum_name<const WORD_SIZE: usize, F: JoltField> { $($alias($struct)),+ }
-        impl<const WORD_SIZE: usize, F: JoltField> From<SubtableId> for $enum_name<WORD_SIZE, F> {
+        pub enum $enum_name<F: JoltField> { $($alias($struct)),+ }
+        impl<F: JoltField> From<SubtableId> for $enum_name<F> {
           fn from(subtable_id: SubtableId) -> Self {
             $(
               if subtable_id == TypeId::of::<$struct>() {
@@ -91,21 +92,23 @@ macro_rules! subtable_enum {
           }
         }
 
-        impl<const WORD_SIZE: usize, F: JoltField> From<$enum_name<WORD_SIZE, F>> for usize {
-            fn from(subtable: $enum_name<WORD_SIZE, F>) -> usize {
+        impl<F: JoltField> From<$enum_name<F>> for usize {
+            fn from(subtable: $enum_name<F>) -> usize {
                 // Discriminant: https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-                let byte = unsafe { *(&subtable as *const $enum_name<WORD_SIZE, F> as *const u8) };
+                let byte = unsafe { *(&subtable as *const $enum_name<F> as *const u8) };
                 byte as usize
             }
         }
-        impl<const WORD_SIZE: usize, F: JoltField> JoltSubtableSet<F> for $enum_name<WORD_SIZE, F> {}
+        impl<F: JoltField> JoltSubtableSet<F> for $enum_name<F> {}
     };
 }
 
 instruction_set!(
   RV_I,
   ADD: ADDInstruction<WORD_SIZE>,
+  ADDW: ADDWInstruction, // TODO(Maks) should be dependent on WORD_SIZE=64
   SUB: SUBInstruction<WORD_SIZE>,
+  SUBW: SUBWInstruction, // TODO(Maks) should be dependent on WORD_SIZE=64
   AND: ANDInstruction<WORD_SIZE>,
   OR: ORInstruction<WORD_SIZE>,
   XOR: XORInstruction<WORD_SIZE>,
@@ -116,8 +119,10 @@ instruction_set!(
   SLT: SLTInstruction<WORD_SIZE>,
   SLTU: SLTUInstruction<WORD_SIZE>,
   SLL: SLLInstruction<WORD_SIZE>,
+  SLLW: SLLWInstruction,  // TODO(Maks) should be dependent on WORD_SIZE=64
   SRA: SRAInstruction<WORD_SIZE>,
   SRL: SRLInstruction<WORD_SIZE>,
+  SRLW: SRLWInstruction,  // TODO(Maks) should be dependent on WORD_SIZE=64
   MOVSIGN: MOVSIGNInstruction<WORD_SIZE>,
   MUL: MULInstruction<WORD_SIZE>,
   MULU: MULUInstruction<WORD_SIZE>,
@@ -130,9 +135,11 @@ instruction_set!(
   VIRTUAL_ASSERT_VALID_DIV0: AssertValidDiv0Instruction<WORD_SIZE>,
   VIRTUAL_ASSERT_HALFWORD_ALIGNMENT: AssertAlignedMemoryAccessInstruction<WORD_SIZE, 2>,
   VIRTUAL_ASSERT_WORD_ALIGNMENT: AssertAlignedMemoryAccessInstruction<WORD_SIZE, 4>
+  // TODO(Maks) DOUBLEWORD alignment?
 );
+
 subtable_enum!(
-  RV_ISubtables,
+  RV32ISubtables,
   AND: AndSubtable<F>,
   EQ_ABS: EqAbsSubtable<F>,
   EQ: EqSubtable<F>,
@@ -143,15 +150,15 @@ subtable_enum!(
   LTU: LtuSubtable<F>,
   OR: OrSubtable<F>,
   SIGN_EXTEND_16: SignExtendSubtable<F, 16>,
-  SLL0: SllSubtable<F, 0, WORD_SIZE>,
-  SLL1: SllSubtable<F, 1, WORD_SIZE>,
-  SLL2: SllSubtable<F, 2, WORD_SIZE>,
-  SLL3: SllSubtable<F, 3, WORD_SIZE>,
-  SRA_SIGN: SraSignSubtable<F, WORD_SIZE>,
-  SRL0: SrlSubtable<F, 0, WORD_SIZE>,
-  SRL1: SrlSubtable<F, 1, WORD_SIZE>,
-  SRL2: SrlSubtable<F, 2, WORD_SIZE>,
-  SRL3: SrlSubtable<F, 3, WORD_SIZE>,
+  SLL0: SllSubtable<F, 0, 32>,
+  SLL1: SllSubtable<F, 1, 32>,
+  SLL2: SllSubtable<F, 2, 32>,
+  SLL3: SllSubtable<F, 3, 32>,
+  SRA_SIGN: SraSignSubtable<F, 32>,
+  SRL0: SrlSubtable<F, 0, 32>,
+  SRL1: SrlSubtable<F, 1, 32>,
+  SRL2: SrlSubtable<F, 2, 32>,
+  SRL3: SrlSubtable<F, 3, 32>,
   XOR: XorSubtable<F>,
   LEFT_IS_ZERO: LeftIsZeroSubtable<F>,
   RIGHT_IS_ZERO: RightIsZeroSubtable<F>,
@@ -160,11 +167,56 @@ subtable_enum!(
   SECOND_LEAST_SIGNIFICANT_BIT: LowBitSubtable<F, 1>
 );
 
+subtable_enum!(
+    RV64ISubtables,
+    AND: AndSubtable<F>,
+    EQ_ABS: EqAbsSubtable<F>,
+    EQ: EqSubtable<F>,
+    LEFT_MSB: LeftMSBSubtable<F>,
+    RIGHT_MSB: RightMSBSubtable<F>,
+    IDENTITY: IdentitySubtable<F>,
+    LT_ABS: LtAbsSubtable<F>,
+    LTU: LtuSubtable<F>,
+    OR: OrSubtable<F>,
+    SIGN_EXTEND_16: SignExtendSubtable<F, 16>,
+    SLL0: SllSubtable<F, 0, 64>,
+    SLL1: SllSubtable<F, 1, 64>,
+    SLL2: SllSubtable<F, 2, 64>,
+    SLL3: SllSubtable<F, 3, 64>,
+    SLL4: SllSubtable<F, 4, 64>,
+    SLL5: SllSubtable<F, 5, 64>,
+    SLL6: SllSubtable<F, 6, 64>,
+    SLL7: SllSubtable<F, 7, 64>,
+    SLLW0: SllSubtable<F, 0, 32>,
+    SLLW1: SllSubtable<F, 1, 32>,
+    SLLW2: SllSubtable<F, 2, 32>,
+    SLLW3: SllSubtable<F, 3, 32>,
+    SRA_SIGN: SraSignSubtable<F, 64>,
+    SRL0: SrlSubtable<F, 0, 64>,
+    SRL1: SrlSubtable<F, 1, 64>,
+    SRL2: SrlSubtable<F, 2, 64>,
+    SRL3: SrlSubtable<F, 3, 64>,
+    SRL4: SrlSubtable<F, 4, 64>,
+    SRL5: SrlSubtable<F, 5, 64>,
+    SRL6: SrlSubtable<F, 6, 64>,
+    SRL7: SrlSubtable<F, 7, 64>,
+    SRLW0: SrlSubtable<F, 0, 32>,
+    SRLW1: SrlSubtable<F, 1, 32>,
+    SRLW2: SrlSubtable<F, 2, 32>,
+    SRLW3: SrlSubtable<F, 3, 32>,
+    XOR: XorSubtable<F>,
+    LEFT_IS_ZERO: LeftIsZeroSubtable<F>,
+    RIGHT_IS_ZERO: RightIsZeroSubtable<F>,
+    DIV_BY_ZERO: DivByZeroSubtable<F>,
+    LSB: LowBitSubtable<F, 0>,
+    SECOND_LEAST_SIGNIFICANT_BIT: LowBitSubtable<F, 1>
+  );
+
 // ==================== JOLT ====================
 
 pub enum RV_IJoltVM<const WORD_SIZE: usize> {}
 
-pub const C: usize = 4;
+pub const C: usize = 8; // TODO(Maks) 8 chunks for rv64, 4 chunks for rv32
 pub const M: usize = 1 << 16;
 
 impl<const WORD_SIZE: usize, F, PCS, ProofTranscript> Jolt<F, PCS, C, M, WORD_SIZE, ProofTranscript> for RV_IJoltVM<WORD_SIZE>
@@ -174,12 +226,12 @@ where
     ProofTranscript: Transcript,
 {
     type InstructionSet = RV_I<WORD_SIZE>;
-    type Subtables = RV_ISubtables<WORD_SIZE, F>;
+    type Subtables = RV64ISubtables<F>; // TODO(Maks) also for 32 bits
     type Constraints = JoltRV_IMConstraints<WORD_SIZE>;
 }
 
 pub type RV_IJoltProof<const WORD_SIZE: usize, F, PCS, ProofTranscript> =
-    JoltProof<WORD_SIZE, C, M, JoltR1CSInputs<WORD_SIZE>, F, PCS, RV_I<WORD_SIZE>, RV_ISubtables<WORD_SIZE, F>, ProofTranscript>;
+    JoltProof<WORD_SIZE, C, M, JoltR1CSInputs<WORD_SIZE>, F, PCS, RV_I<WORD_SIZE>, RV64ISubtables<F>, ProofTranscript>;
 
 use crate::utils::transcript::{KeccakTranscript, Transcript};
 use eyre::Result;

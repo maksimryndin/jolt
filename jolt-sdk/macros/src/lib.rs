@@ -193,7 +193,7 @@ impl MacroBuilder {
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "guest")))]
             pub fn #preprocess_fn_name() -> (
                 jolt::host::Program<WORD_SIZE>,
-                jolt::JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript>
+                jolt::JoltPreprocessing<C, jolt::F, jolt::PCS, jolt::ProofTranscript>
             ) {
                 #imports
 
@@ -203,9 +203,9 @@ impl MacroBuilder {
                 #set_mem_size
                 let (bytecode, memory_init) = program.decode();
                 let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
-
+                
                 // TODO(moodlezoup): Feed in size parameters via macro
-                let preprocessing: JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript> =
+                let preprocessing: JoltPreprocessing<C, jolt::F, jolt::PCS, jolt::ProofTranscript> =
                     RV_IJoltVM::preprocess(
                         bytecode,
                         memory_layout,
@@ -247,7 +247,7 @@ impl MacroBuilder {
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "guest")))]
             pub fn #prove_fn_name(
                 mut program: jolt::host::Program<WORD_SIZE>,
-                preprocessing: jolt::JoltPreprocessing<4, jolt::F, jolt::PCS, jolt::ProofTranscript>,
+                preprocessing: jolt::JoltPreprocessing<C, jolt::F, jolt::PCS, jolt::ProofTranscript>,
                 #inputs
             ) -> #prove_output_ty {
                 #imports
@@ -336,7 +336,8 @@ impl MacroBuilder {
                     j .\n\
             ");
 
-            const WORD_SIZE: usize = 32;
+            const WORD_SIZE: usize = 64;
+            const C: usize = WORD_SIZE / 8;
 
             #declare_alloc
 

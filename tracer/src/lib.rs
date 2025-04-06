@@ -16,8 +16,9 @@ mod decode;
 mod emulator;
 mod trace;
 
+
 pub use common::rv_trace::{
-    ELFInstruction, JoltDevice, MemoryState, RVTraceRow, RegisterState, RV_IM,
+    ELFInstruction, JoltDevice, MemoryState, RVTraceRow, RegisterState, RV_IM
 };
 
 use crate::decode::decode_raw;
@@ -70,6 +71,7 @@ pub fn trace<const XLEN: usize>(
 
 #[tracing::instrument(skip_all)]
 pub fn decode<const XLEN: usize>(elf: &[u8]) -> (Vec<ELFInstruction<XLEN>>, Vec<(u64, u8)>) {
+    // TODO(Maks) unify with ElfAnalyzer?
     let obj = object::File::parse(elf).unwrap();
     // TODO(Maks) check that word_size is correct for the parsed object file
     let sections = obj
@@ -77,6 +79,7 @@ pub fn decode<const XLEN: usize>(elf: &[u8]) -> (Vec<ELFInstruction<XLEN>>, Vec<
         .filter(|s| s.address() >= RAM_START_ADDRESS)
         .collect::<Vec<_>>();
 
+    // TODO(Maks) is it possible to preallocate?? based on the length of the file?
     let mut instructions = Vec::new();
     let mut data = Vec::new();
 

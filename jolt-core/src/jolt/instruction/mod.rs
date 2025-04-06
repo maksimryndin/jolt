@@ -151,6 +151,7 @@ pub trait VirtualInstructionSequence<const WORD_SIZE: usize> {
 }
 
 pub mod add;
+pub mod addw;
 pub mod and;
 pub mod beq;
 pub mod bge;
@@ -173,11 +174,14 @@ pub mod remu;
 pub mod sb;
 pub mod sh;
 pub mod sll;
+pub mod sllw;
 pub mod slt;
 pub mod sltu;
 pub mod sra;
 pub mod srl;
+pub mod srlw;
 pub mod sub;
+pub mod subw;
 pub mod virtual_advice;
 pub mod virtual_assert_aligned_memory_access;
 pub mod virtual_assert_lte;

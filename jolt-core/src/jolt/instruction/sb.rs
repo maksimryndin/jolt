@@ -10,7 +10,7 @@ use crate::jolt::instruction::{
 pub struct SBInstruction<const WORD_SIZE: usize>;
 
 impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for SBInstruction<WORD_SIZE> {
-    const SEQUENCE_LENGTH: usize = 11;
+    const SEQUENCE_LENGTH: usize = if WORD_SIZE == 32 { 11 } else { 12 };
     
     fn virtual_trace(trace_row: RVTraceRow<WORD_SIZE>) -> Vec<RVTraceRow<WORD_SIZE>> {
         assert_eq!(trace_row.instruction.opcode, RV_IM::SB);
@@ -31,6 +31,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for SBInstruc
 
         let mut virtual_trace = vec![];
 
+        // TODO(Maks) const
         let offset_unsigned = match WORD_SIZE {
             32 => (offset & u32::MAX as i64) as u64,
             64 => offset as u64,
@@ -59,6 +60,7 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for SBInstruc
             precompile_output_address: None,
         });
 
+        // TODO(Maks) const u64::MAX - 3 for 64 bit
         let word_address_bitmask = ((1u128 << WORD_SIZE) - 4) as u64;
         let word_address =
             ANDInstruction::<WORD_SIZE>(ram_address, word_address_bitmask).lookup_entry();
@@ -126,19 +128,47 @@ impl<const WORD_SIZE: usize> VirtualInstructionSequence<WORD_SIZE> for SBInstruc
             precompile_output_address: None,
         });
 
-        let bit_shift = SLLInstruction::<WORD_SIZE>(ram_address, 3).lookup_entry();
+        let bit_shift_address = if WORD_SIZE == 32 {
+            ram_address
+        } else {
+            let bit_shift_bitmask = 0x3;
+            let bit_shift_address = ANDInstruction::<WORD_SIZE>(ram_address, bit_shift_bitmask).lookup_entry();
+            virtual_trace.push(RVTraceRow {
+                instruction: ELFInstruction {
+                    address: trace_row.instruction.address,
+                    opcode: RV_IM::ANDI,
+                    rs1: v_address,
+                    rs2: None,
+                    rd: v_shift,
+                    imm: Some(bit_shift_bitmask as i64),
+                    virtual_sequence_remaining: Some(Self::SEQUENCE_LENGTH - virtual_trace.len() - 1),
+                },
+                register_state: RegisterState {
+                    rs1_val: Some(ram_address),
+                    rs2_val: None,
+                    rd_post_val: Some(bit_shift_address),
+                },
+                memory_state: None,
+                advice_value: None,
+                precompile_input: None,
+                precompile_output_address: None,
+            });
+            bit_shift_address
+        };
+
+        let bit_shift = SLLInstruction::<WORD_SIZE>(bit_shift_address, 3).lookup_entry();
         virtual_trace.push(RVTraceRow {
             instruction: ELFInstruction {
                 address: trace_row.instruction.address,
                 opcode: RV_IM::SLLI,
-                rs1: v_address,
+                rs1: if WORD_SIZE == 32 { v_address } else { v_shift },
                 rs2: None,
                 rd: v_shift,
                 imm: Some(3),
                 virtual_sequence_remaining: Some(Self::SEQUENCE_LENGTH - virtual_trace.len() - 1),
             },
             register_state: RegisterState {
-                rs1_val: Some(ram_address),
+                rs1_val: Some(bit_shift_address),
                 rs2_val: None,
                 rd_post_val: Some(bit_shift),
             },

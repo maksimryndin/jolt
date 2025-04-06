@@ -36,6 +36,7 @@ impl<const WORD_SIZE: usize, const ALIGN: usize> JoltInstruction
                 let second_lowest_bit = vals[1];
                 (F::one() - lowest_bit) * (F::one() - second_lowest_bit)
             }
+            // TODO(Maks) check for LD etc for rv64im
             _ => panic!("ALIGN must be either 2 (for LH, LHU, SH) or 4 (for LW, SW)"),
         }
     }
@@ -44,6 +45,7 @@ impl<const WORD_SIZE: usize, const ALIGN: usize> JoltInstruction
         match ALIGN {
             2 => 1,
             4 => 2,
+            // TODO(Maks) check for LD etc for rv64im
             _ => panic!("ALIGN must be either 2 (for LH, LHU, SH) or 4 (for LW, SW)"),
         }
     }
